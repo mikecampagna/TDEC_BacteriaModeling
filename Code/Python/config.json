@@ -1,0 +1,9 @@
+{
+	"PGtest": {
+        "port": "5432",
+        "host": "localhost",
+        "database": "bacteria_modeling",
+        "user": "postgres",
+        "password": "postgres"
+    }
+}
