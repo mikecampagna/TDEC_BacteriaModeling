@@ -4,15 +4,10 @@ import json
 
 
 _jsonIn = {
-  "bmp_geometry": {
-    "type": "Polygon","coordinates": [ [ [-75.0289808774247, 40.030406052337355],[-75.02751102688454, 40.0312932778299],[-75.02708187344216, 40.030915386901405],[-75.0285839104905, 40.02997886557678],[-75.0289808774247, 40.030406052337355] ] ]
-  },
-  "bmp_type": "Bioretention",
-  "bmp_group": "Urban Stormwater Management",
-
-  "acres_treated": 0.0,
-  "percent_impervious": 0.0,
-  "runoff_capture": 0.0
+  "bmp_name": "Forest Buffer",
+  "bmp_id": 10,
+  "huc12": "020402070301",
+  "nhd_comid": 8074660
 }
 
 parentpath = r'C:\Users\mcamp\Documents\GitHub\TDEC_BacteriaModeling\Code\Python\\'

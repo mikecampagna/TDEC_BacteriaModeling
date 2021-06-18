@@ -16,10 +16,16 @@ from math import radians, cos, sin, asin, sqrt
 # Create CLass BMP
 class WatershedTreatmentModel:
     def __init__(self,_jsonIn, _PG_datafiles):
-        # LandUse-LandCover
-        self.__lulc = {}
-        self.__lulc_fc_emc = {}
-        self.__lulc_fd_export_coef = {}
+        self.__bmp_type = ''                # TODO: user input parse
+        self.__bmp_id = 0                   # TODO: user input parse
+        self.__huc12 = '000000000000'       # TODO: user input parse
+        self.__nhd_comid = 0                # TODO: user input parse
+
+        # LandUse-LandCover Data
+        self.__lulc = {}                    # dict {lc1: 0.0, lc2...}
+        self.__lulc_groups = {}             # dict {lc1: {imperv: 0.0, turf: 0.0, forest: 0.0}, lc2...}
+        self.__lulc_fc_emc = {}             # dict {lc1: 0.0, lc2...}
+        self.__lulc_fc_export_coef = {}     # dict {lc1: 0.0, lc2...}
         self.__fraction_imperv = 0.0
         self.__fration_turf = 0.0
         self.__fration_forest = 0.0
@@ -28,29 +34,32 @@ class WatershedTreatmentModel:
         self.__urban_turf_area = 0.0
         self.__total_turf_area = 0.0
 
+        # Watershed Data
+        self.__annual_rainfall_in = 0.0
+        self.__watershed_area = 0.0
+        self.__number_du = 0.0
+        self.__people_per_du = 2.7
+        self.__population = 0.0
+        self.__wateruse_gpcd = 70
+        self.__soil_fraction = {a: 13.8, b: 54.1, c: 25.4, d: 6.8}
+        self.__runoff_coeffs = {a: {imperv: 0.95, turf: 0.15, forest: 0.02, rural: 0.02, active_constr: 0.5, water: 1.0},
+                                b: {imperv: 0.95, turf: 0.20, forest: 0.03, rural: 0.03, active_constr: 0.5, water: 1.0},
+                                c: {imperv: 0.95, turf: 0.22, forest: 0.04, rural: 0.04, active_constr: 0.5, water: 1.0},
+                                d: {imperv: 0.95, turf: 0.25, forest: 0.05, rural: 0.05, active_constr: 0.5, water: 1.0}}
 
-        self.__Coefs = {}
-        self.__BmpType = ''
-        self.__BmpGroup = ''
-        self.__GeomBmp  = []    # TODO Part of the input Parse
-        self.__GeomBmpCentroid = [] # TODO Call to the Watershed Boundary
+        # BMPs
+        self.__bmp_discounts = {capture: 0.9, design: 1.2, maintenance: 0.9}
+
+
+
+        self.__GeomBmp  = []
         self.__GeomWatershed = []
-        self.__Huc12 = '000000000000' # TO DO make real
         self.__Description =  ''
-        self.__Polutants_Reduction_Kgyr = {"tn": 0, "tp": 0, "tss":0}
-        self.__Polutants_Reduction_lbyr = {"tn": 0, "tp": 0, "tss": 0}
-        self.__Load_Coefs_Kgacreyr = {} ## TODO currently running with a json parse but eventually needs to be a database lookup
-        self.__Load_Coefs_lbacreyr = {}
-        self.__Pollutants = set(['tn,''tp','tss'])
-                  # TODO Need to get watershed LULC distribution for load calcs
         self.__PG_datafiles = {}
         self.__PG_Connection = ()
         self.__AcresTreated = 0.0
         self.__Implemented = False
         self.__NumberOfUnits = 0.0
-        self.__Delivery = {}
-        self.__PercentImpervious = 0.0
-        self.__RunoffCapture = 0.0
 
         ## Run input functions to load JSON objects
         self.setSettings(_jsonIn, _PG_datafiles)
@@ -60,35 +69,56 @@ class WatershedTreatmentModel:
     def setSettings(self,_jsonIn, _PG_datafiles):
         for _key in _jsonIn.keys():
             if _key == 'bmp_geometry':
-
                 self.setGeomBmp(_jsonIn[_key])
 
             if _key == 'bmp_type':
                 self.setBmpType(_jsonIn[_key])
 
-            if _key == 'bmp_group':
-                self.setBmpGroup(_jsonIn[_key])
+            if _key == 'bmp_id':
+                self.setBmpType(_jsonIn[_key])
 
-            if _key == 'acres_treated':
+            if _key == 'nhd_comid':
+                self.setBmpType(_jsonIn[_key])
+
+            if _key == 'huc12':
+                self.setBmpType(_jsonIn[_key])
+
+            if _key == 'drainage_ac':
                 self.setAcresTreated(_jsonIn[_key])
-
-            if _key == 'implemented':
-                self.setImplemented(bool(_jsonIn[_key]))
-
-            if _key == 'stream_feet_treated':
-                self.setStreamFeetTreated(_jsonIn[_key])
-
-            if _key == 'number_of_units':
-                self.setNumberOfUnits((_jsonIn[_key]))
-
-            if _key == 'animal_treated':
-                self.setBmpAnimalsTreated(_jsonIn[_key])
 
             if _key == 'percent_impervious':
                 self.setPercentImpervious(_jsonIn[_key])
 
-            if _key == 'runoff_capture':
+            if _key == 'runoff_capture_in':
                 self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'acres_converted':
+                self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'landuse_converted':
+                self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'converted_to':
+                self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'fraction_willing':
+                self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'awareness':
+                self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'n_systems_treated':
+                self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'n_systems_retired':
+                self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'sewer_miles':
+                self.setRunoffCapture(_jsonIn[_key])
+
+            if _key == 'slipline_miles':
+                self.setRunoffCapture(_jsonIn[_key])
+
 
         self.__PG_Connection = psycopg2.connect(
                 host=_PG_datafiles["host"] ,
@@ -97,7 +127,7 @@ class WatershedTreatmentModel:
                 password=_PG_datafiles["password"] ,
                 port= _PG_datafiles["port"] )
 
-        with open('config/bmpSettings.json') as _jf:
+        with open('config/lookupSettings.json') as _jf:
             settings = json.load(_jf)
             self.__Coefs = settings['coefs']
             self.__Load_Coefs_Kgacreyr = settings['load_coefs_kgacreyr']
@@ -127,12 +157,13 @@ class WatershedTreatmentModel:
             return 0
 
     def setBmpType(self, _value):
-        self.__BmpType = _value;
+        self.__BmpType = _value
 
     def getBmpType(self):
         return self.__BmpType
 
     def getAcresTreated(self):
+        # If they did not provide the acres treated, assume that the polygon submitted is the drainage area
         if self.__AcresTreated == 0.0:
             if self.getBmpGroup() == 'Urban Stormwater Management':
                 shapein = shape(self.getGeomWatershed())

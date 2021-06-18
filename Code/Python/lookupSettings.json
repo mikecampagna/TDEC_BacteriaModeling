@@ -1,0 +1,165 @@
+{
+  "coefs": {
+    "Forest Buffer": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75,
+      "efficiency": 0.0,
+      "per_acre": 51.3
+    },
+    "Land Retirement": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75,
+      "efficiency": 0.0,
+      "per_acre": 51.3
+    },
+    "Runoff Reduction": {
+      "removal_rate": 0.70,
+      "runoff_redux": 0.50,
+      "rr_a_weighted": 0.50
+    },
+    "RR": {
+      "removal_rate": 0.70,
+      "runoff_redux": 0.50,
+      "rr_a_weighted": 0.50
+    },
+    "Stormwater Treatment": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75
+    },
+    "ST": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75
+    },
+    "Septic Denitrifcation and Pumping": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75
+    },
+    "Septic Connection": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75
+    },
+    "Impervious surface elimination to pervious surface": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75
+    },
+    "Impervious Surface Elimination to Pervious Surface": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75
+    },
+    "Pet Waste Education": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75
+    },
+    "Sliplines (miles)": {
+      "removal_rate": 0.42,
+      "runoff_redux": 0.75,
+      "rr_a_weighted": 0.75
+    }
+  },
+
+  "bmp_names":
+   ["Forest Buffer",
+     "Land Retirement",
+     "Runoff Reduction",
+     "RR",
+     "Stormwater Treatment",
+     "ST",
+     "Septic Denitrifcation and Pumping",
+     "Septic Connection",
+     "Impervious surface elimination to pervious surface",
+     "Impervious Surface Elimination to Pervious Surface",
+     "Pet Waste Education",
+     "Sliplines"
+  ],
+
+  "bmp_ids": {
+    "Ammonia Emissions Reduction":  1,
+    "Pasture Management":  2,
+    "Waste Management System":  3,
+    "Ag E&S":  4,
+    "Conservation Plans":  5,
+    "Cover Crop":  6,
+    "Ditch Controls":  7,
+    "Nutrient Management":  8,
+    "Tillage Management":  9,
+    "Forest Buffer":  10,
+    "Grass Buffer":  11,
+    "Land Retirement":  12,
+    "Streambank Fencing":  13,
+    "Wetland Creation/Restoration":  14,
+    "Manure Transport":  15,
+    "E&S Level 2":  16,
+    "RR":  17,
+    "ST":  18,
+    "Shoreline Erosion Control":  19,
+    "Stream Restoration":  20,
+    "Septic Denitrifcation and Pumping":  21,
+    "Septic Connection":  22,
+    "Stream Restoration Protocol":  23,
+    "Impervious Surface Elimination to Pervious Surface":  24,
+    "Pet Waste Education":  25,
+    "Sliplines (miles)":  26
+  },
+
+  "load_coefs":
+    {
+          "21":	0.0, "22":	0.0, "23":	0.0, "24":	0.0,
+          "31":	0.0, "41":	0.0, "42":	0.0, "43":	0.0, "51":	0.0, "52":	0.0, "71":	0.0, "72": 0.0, "73":	0.0, "74":	0.0,
+          "81":	0.0, "82":	0.0, "90":	0.0, "95":	0.0,
+
+          "0":	0.0, "1":	0.0, "2":	0.0, "3":	0.0, "4":	0.0, "5":	0.0, "6":	0.0, "7":	0.0, "8":	0.0, "9":	0.0, "10":	0.0, "11":	0.0, "12":	0.0
+        }
+      ,
+
+
+  "lulc":
+    {"nlcd2011":
+          {
+          "11":	"Open Water- areas of open water, generally with less than 25% cover of vegetation or soil.",
+          "12":	"Perennial Ice/Snow- areas characterized by a perennial cover of ice and/or snow, generally greater than 25% of total cover",
+          "21":	"Developed, Open Space- areas with a mixture of some constructed materials, but mostly vegetation in the form of lawn grasses. Impervious surfaces account for less than 20% of total cover. These areas most commonly include large-lot single-family housing units, parks, golf courses, and vegetation planted in developed settings for recreation, erosion control, or aesthetic purposes.",
+          "22":	"Developed, Low Intensity- areas with a mixture of constructed materials and vegetation. Impervious surfaces account for 20% to 49% percent of total cover. These areas most commonly include single-family housing units.",
+          "23":	"Developed, Medium Intensity -areas with a mixture of constructed materials and vegetation. Impervious surfaces account for 50% to 79% of the total cover. These areas most commonly include single-family housing units.",
+          "24":	"Developed High Intensity-highly developed areas where people reside or work in high numbers. Examples include apartment complexes, row houses and commercial/industrial. Impervious surfaces account for 80% to 100% of the total cover. Barren",
+          "31":	"Barren Land (Rock/Sand/Clay) - areas of bedrock, desert pavement, scarps, talus, slides, volcanic material, glacial debris, sand dunes, strip mines, gravel pits and other accumulations of earthen material. Generally, vegetation accounts for less than 15% of total cover.",
+          "41":	"Deciduous Forest- areas dominated by trees generally greater than 5 meters tall, and greater than 20% of total vegetation cover. More than 75% of the tree species shed foliage simultaneously in response to seasonal change.",
+          "42":	"Evergreen Forest- areas dominated by trees generally greater than 5 meters tall, and greater than 20% of total vegetation cover. More than 75% of the tree species maintain their leaves all year. Canopy is never without green foliage.",
+          "43":	"Mixed Forest- areas dominated by trees generally greater than 5 meters tall, and greater than 20% of total vegetation cover. Neither deciduous nor evergreen species are greater than 75% of total tree cover.",
+          "51":	"Dwarf Scrub- Alaska only areas dominated by shrubs less than 20 centimeters tall with shrub canopy typically greater than 20% of total vegetation. This type is often co-associated with grasses, sedges, herbs, and non-vascular vegetation.",
+          "52":	"Shrub/Scrub- areas dominated by shrubs; less than 5 meters tall with shrub canopy typically greater than 20% of total vegetation. This class includes true shrubs, young trees in an early successional stage or trees stunted from environmental conditions.",
+          "71":	"Grassland/Herbaceous- areas dominated by gramanoid or herbaceous vegetation, generally greater than 80% of total vegetation. These areas are not subject to intensive management such as tilling, but can be utilized for grazing.",
+          "72":	"Sedge/Herbaceous- Alaska only areas dominated by sedges and forbs, generally greater than 80% of total vegetation. This type can occur with significant other grasses or other grass like plants, and includes sedge tundra, and sedge tussock tundra.",
+          "73":	"Lichens- Alaska only areas dominated by fruticose or foliose lichens generally greater than 80% of total vegetation.",
+          "74":	"Moss- Alaska only areas dominated by mosses, generally greater than 80% of total vegetation. Planted/Cultivated",
+          "81":	"Pasture/Hay-areas of grasses, legumes, or grass-legume mixtures planted for livestock grazing or the production of seed or hay crops, typically on a perennial cycle. Pasture/hay vegetation accounts for greater than 20% of total vegetation.",
+          "82":	"Cultivated Crops -areas used for the production of annual crops, such as corn, soybeans, vegetables, tobacco, and cotton, and also perennial woody crops such as orchards and vineyards. Crop vegetation accounts for greater than 20% of total vegetation.",
+          "90":	"Woody Wetlands- areas where forest or shrubland vegetation accounts for greater than 20% of vegetative cover and the soil or substrate is periodically saturated with or covered with water.",
+          "95":	"Emergent Herbaceous Wetlands- Areas where perennial herbaceous vegetation accounts for greater than 80% of vegetative cover and the soil or substrate is periodically saturated with or covered with water."
+          },
+    "cb10m":
+          {
+            "0": "Cropland",
+            "1": "Forest",
+            "2": "Impervious Non-Road",
+            "3": "Impervious Road",
+            "4": "Mixed Open",
+            "5": "Pasture",
+            "6": "Tree Canopy over Impervious",
+            "7": "Tree Canopy over Turf Grass",
+            "8": "Turf Grass",
+            "9": "Water",
+            "10": "Non-Tidal Floodplain Wetlands",
+            "11": "Non-Tidal Other Wetlands",
+            "12": "Tidal Wetlands"
+            }
+    }
+}
