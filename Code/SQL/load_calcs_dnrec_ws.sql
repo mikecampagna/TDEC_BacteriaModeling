@@ -1,208 +1,196 @@
-﻿
-drop table if exists dnrec.septicsystems;
-create table dnrec.septicsystems
-(
-	pild	int
-,	flow_galday	int
-,	systemclass	varchar(64)
-,	facid	int
-,	facname	varchar(256)
-,	piname	varchar(256)
-,	lat	numeric(11,8)
-,	lng	numeric(11,8)
-
-);
-
-alter table dnrec.septicsystems add constraint pk_septicsystems primary key (pild, facid);
-alter table dnrec.septicsystems add column geom geometry(point,32618);
-update dnrec.septicsystems set geom = st_transform(st_setsrid(st_makepoint(lng,lat),4326),32618)::geometry(point,32618);
-create index septicsystems_geom_idx
-on dnrec.septicsystems
-using gist(geom);
-
-select sum("B00002e1") 
-from spatial.acs_2018_bg_counts 
-; --35070
-
-select sum(b25001e1) 
-from spatial.acs_2018_bg_housing 
-; --428251
-
-select sum(B25002e2) 
-from spatial.acs_2018_bg_housing 
-; --357765
-
-
-select sum(b01001e1) 
-from spatial.acs_2018_bg_totpop 
-; --949495
-
-drop table if exists spatial.temp_du;
-create table spatial.temp_du
-as
-select a."GEOID" as geoid
-,b.b25001e1 as dwelling_units
-,a.geom
-from spatial.acs_2018_bg as a
-left join spatial.acs_2018_bg_housing as b
-on a."OBJECTID" = b.objectid
+﻿--
+select distinct a.*-- basins_id
+from spatial.dnrec_watersheds as a
+join dnrec.flow_watershed_final as b
+on st_intersects(st_centroid(a.geom), b.geom_dnrec)
 ;
 
 
-select distinct comid, sum(nhd_du) over (partition by comid) as nhd_du
+-- CREATE THE DNREC TMDL WS TDEC Table
+drop table if exists spatial.dnrecws_tdec;
+create table spatial.dnrecws_tdec
+as
+select distinct a.basins_id as dnrecws, a.*
+,avg(b.precipmm_ma) over (partition by a.basins_id) as precipmm_ma
+
 from (
-	select id, comid, int_area/bg_area as p_bg, (int_area/bg_area) * tot_du as nhd_du, tot_du
+	select distinct a.*-- basins_id
+	from spatial.dnrec_watersheds as a
+	join dnrec.flow_watershed_final as b
+	on st_intersects(st_centroid(a.geom), b.geom_dnrec)
+) as a
+
+left join spatial.nhdplus_tdec as b
+on st_intersects(a.geom, st_centroid(b.catchment))
+
+order by basins_id;
+
+alter table spatial.dnrecws_tdec add constraint pk_dnrecws_tdec primary key (basins_id);
+
+create index dnrecws_tdec_geom_idx on spatial.dnrecws_tdec using gist(geom);
+
+select * from spatial.dnrecws_tdec;
+
+-- 30 WS's
+
+-----------------------------
+
+
+select distinct dnrecws, sum(dnrecws_du) over (partition by dnrecws) as dnrecws_du
+from (
+	select id, dnrecws, int_area/bg_area as p_bg, (int_area/bg_area) * tot_du as dnrecws_du, tot_du
 	from (
 		select a.id
 		,a."OBJECTID" as objid
-		,d.comid
+		,d.dnrecws
 		,b.B25002e2 as tot_du
 		,c.b01001e1 as tot_pop
 		,st_area(a.geom) as bg_area
-		,st_area(d.catchment) as nhd_area
-		,st_area(st_makevalid(st_multi(st_intersection(a.geom, d.catchment)))) as int_area
-		,st_makevalid(st_multi(st_intersection(a.geom, d.catchment)))::geometry(multipolygon,32618) as geom_int
+		,st_area(d.geom) as dnrecws_area
+		,st_area(st_makevalid(st_multi(st_intersection(a.geom, d.geom)))) as int_area
+		,st_makevalid(st_multi(st_intersection(a.geom, d.geom)))::geometry(multipolygon,32618) as geom_int
 		from spatial.acs_2018_bg as a
 		left join spatial.acs_2018_bg_housing as b
 		on a."OBJECTID" = b.objectid
 		left join spatial.acs_2018_bg_totpop as c
 		on a."OBJECTID" = c.objectid
-		left join spatial.nhdplus_tdec as d
-		on st_intersects(a.geom, d.catchment)
-		order by a.id, d.comid
+		left join spatial.dnrecws_tdec as d
+		on st_intersects(a.geom, d.geom)
+		order by a.id, d.dnrecws
 	) t1
-	order by comid
+	order by dnrecws
 ) as t2
 ;
 
 
-select * from spatial.nhdplus_tdec limit 1000;
+select * from spatial.dnrecws_tdec limit 1000;
 
-select * from spatial.wbdhuc12_de;
+select * from spatial.wbddnrecws_de;
 
-alter table spatial.nhdplus_tdec add column acs_bg_id bigint;
-update spatial.nhdplus_tdec a set acs_bg_id = b.id
+-- This works for NHDplus catchments, but not really for dnrecwss. I never use the column though and I would rather just include it for now.
+alter table spatial.dnrecws_tdec add column acs_bg_id bigint;
+update spatial.dnrecws_tdec a set acs_bg_id = b.id
 from spatial.acs_2018_bg as b
 where st_intersects(st_centroid(a.geom), b.geom);
 
-alter table spatial.nhdplus_tdec drop column acs_pop;
-alter table spatial.nhdplus_tdec drop column acs_du;
+alter table spatial.dnrecws_tdec drop column acs_pop;
+alter table spatial.dnrecws_tdec drop column acs_du;
 
-alter table spatial.nhdplus_tdec add column acs_pop int;
-alter table spatial.nhdplus_tdec add column acs_du int;
+alter table spatial.dnrecws_tdec add column acs_pop int;
+alter table spatial.dnrecws_tdec add column acs_du int;
 
 -- UPDATE POPULATION
-update spatial.nhdplus_tdec a set acs_pop = b.nhd_pop::int
+update spatial.dnrecws_tdec a set acs_pop = b.dnrecws_pop::int
 from (
-select distinct comid, sum(nhd_pop) over (partition by comid) as nhd_pop
+select distinct dnrecws, sum(dnrecws_pop) over (partition by dnrecws) as dnrecws_pop
 from (
-	select id, comid, int_area/bg_area as p_bg, (int_area/bg_area) * tot_pop as nhd_pop, tot_pop
+	select id, dnrecws, int_area/bg_area as p_bg, (int_area/bg_area) * tot_pop as dnrecws_pop, tot_pop
 	from (
 		select a.id
 		,a."OBJECTID" as objid
-		,d.comid
+		,d.dnrecws
 		,b.B25002e2 as tot_du
 		,c.b01001e1 as tot_pop
 		,st_area(a.geom) as bg_area
-		,st_area(d.catchment) as nhd_area
-		,st_area(st_makevalid(st_multi(st_intersection(a.geom, d.catchment)))) as int_area
-		,st_makevalid(st_multi(st_intersection(a.geom, d.catchment)))::geometry(multipolygon,32618) as geom_int
+		,st_area(d.geom) as dnrecws_area
+		,st_area(st_makevalid(st_multi(st_intersection(a.geom, d.geom)))) as int_area
+		,st_makevalid(st_multi(st_intersection(a.geom, d.geom)))::geometry(multipolygon,32618) as geom_int
 		from spatial.acs_2018_bg as a
 		left join spatial.acs_2018_bg_housing as b
 		on a."OBJECTID" = b.objectid
 		left join spatial.acs_2018_bg_totpop as c
 		on a."OBJECTID" = c.objectid
-		left join spatial.nhdplus_tdec as d
-		on st_intersects(a.geom, d.catchment)
-		order by a.id, d.comid
+		left join spatial.dnrecws_tdec as d
+		on st_intersects(a.geom, d.geom)
+		order by a.id, d.dnrecws
 	) t1
-	order by comid
+	order by dnrecws
 ) as t2
 ) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws;
 
 -- UPDATE DWELLING UNITS
-update spatial.nhdplus_tdec a set acs_du = b.nhd_du::int
+update spatial.dnrecws_tdec a set acs_du = b.dnrecws_du::int
 from (
-select distinct comid, sum(nhd_du) over (partition by comid) as nhd_du
+select distinct dnrecws, sum(dnrecws_du) over (partition by dnrecws) as dnrecws_du
 from (
-	select id, comid, int_area/bg_area as p_bg, (int_area/bg_area) * tot_du as nhd_du, tot_du
+	select id, dnrecws, int_area/bg_area as p_bg, (int_area/bg_area) * tot_du as dnrecws_du, tot_du
 	from (
 		select a.id
 		,a."OBJECTID" as objid
-		,d.comid
+		,d.dnrecws
 		,b.B25002e2 as tot_du
 		,c.b01001e1 as tot_pop
 		,st_area(a.geom) as bg_area
-		,st_area(d.catchment) as nhd_area
-		,st_area(st_makevalid(st_multi(st_intersection(a.geom, d.catchment)))) as int_area
-		,st_makevalid(st_multi(st_intersection(a.geom, d.catchment)))::geometry(multipolygon,32618) as geom_int
+		,st_area(d.geom) as dnrecws_area
+		,st_area(st_makevalid(st_multi(st_intersection(a.geom, d.geom)))) as int_area
+		,st_makevalid(st_multi(st_intersection(a.geom, d.geom)))::geometry(multipolygon,32618) as geom_int
 		from spatial.acs_2018_bg as a
 		left join spatial.acs_2018_bg_housing as b
 		on a."OBJECTID" = b.objectid
 		left join spatial.acs_2018_bg_totpop as c
 		on a."OBJECTID" = c.objectid
-		left join spatial.nhdplus_tdec as d
-		on st_intersects(a.geom, d.catchment)
-		order by a.id, d.comid
+		left join spatial.dnrecws_tdec as d
+		on st_intersects(a.geom, d.geom)
+		order by a.id, d.dnrecws
 	) t1
-	order by comid
+	order by dnrecws
 ) as t2
 ) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws
 ;
 
 -- SEPTIC LOAD
 -- avg person per du is the number of bedrooms, 120 gallons of septic per bedroom, 21% of DU are unsewered
 
-alter table spatial.nhdplus_tdec add column septic_galyear numeric(12,2);
-update spatial.nhdplus_tdec a set septic_galyear = b.septic_gal_yr
+alter table spatial.dnrecws_tdec add column septic_galyear numeric(12,2);
+update spatial.dnrecws_tdec a set septic_galyear = b.septic_gal_yr
 from (
-	select t1.comid, septic_gal_yr + coalesce(septic_gal_yr_pt,0) as septic_gal_yr
+	select t1.dnrecws, septic_gal_yr + coalesce(septic_gal_yr_pt,0) as septic_gal_yr
 	from (
-		select comid, (acs_pop::numeric / acs_du::numeric * 0.21) * 120.0 * 365.25 as septic_gal_yr
-		from spatial.nhdplus_tdec
+		select dnrecws, (acs_pop::numeric / acs_du::numeric * 0.21) * 120.0 * 365.25 as septic_gal_yr
+		from spatial.dnrecws_tdec
 		where acs_du > 0.0
 	) as t1
 	left join (
 		-- SHOULD WE TREAT COMMERCIAL vs COMMUNITY systems differently?
-		select b.comid, 
+		select b.dnrecws, 
 			case when systemclass = 'Community' then (a.flow_galday * 365.25)* 1.0
 			else a.flow_galday * 365.25
 			end as septic_gal_yr_pt
 		from dnrec.septicsystems as a
-		join spatial.nhdplus_tdec as b
-		on st_intersects(a.geom, b.catchment)
+		join spatial.dnrecws_tdec as b
+		on st_intersects(a.geom, b.geom)
 	) as t2
-	on t1.comid = t2.comid
-	order by t1.comid
+	on t1.dnrecws = t2.dnrecws
+	order by t1.dnrecws
 ) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws
 ;
 
-select * from spatial.nhdplus_tdec where septic_galyear < 0
+select * from spatial.dnrecws_tdec where septic_galyear < 0
 
--- NUMBER OF SYSTEMS == NUMBE OF UNSEWERED DWELLING UNITS
-alter table spatial.nhdplus_tdec add column n_septic_systems bigint;
-update spatial.nhdplus_tdec a set n_septic_systems = b.n_septic_systems
+-- NUMBER OF SYSTEMS == NUMBER OF UNSEWERED DWELLING UNITS
+alter table spatial.dnrecws_tdec add column n_septic_systems bigint;
+update spatial.dnrecws_tdec a set n_septic_systems = b.n_septic_systems
 from (
-	select t1.comid, t1.n_septic_systems + coalesce(t2.n_septic_systems_pt,0) as n_septic_systems
+	select t1.dnrecws, t1.n_septic_systems + coalesce(t2.n_septic_systems_pt,0) as n_septic_systems
 	from (
-		select comid, (acs_du::numeric * 0.21)::int as n_septic_systems
-		from spatial.nhdplus_tdec
+		select dnrecws, (acs_du::numeric * 0.21)::int as n_septic_systems
+		from spatial.dnrecws_tdec
 		where acs_du > 0.0
 		) as t1
 	left join (
 		-- SHOULD WE TREAT COMMERCIAL vs COMMUNITY systems differently?
-		select b.comid, count(a.facid) over (partition by b.comid) as n_septic_systems_pt
+		select b.dnrecws, count(a.facid) over (partition by b.dnrecws) as n_septic_systems_pt
 		from dnrec.septicsystems as a
-		join spatial.nhdplus_tdec as b
-		on st_intersects(a.geom, b.catchment)
+		join spatial.dnrecws_tdec as b
+		on st_intersects(a.geom, b.geom)
 	) as t2
-	on t1.comid = t2.comid
-	order by t1.comid
+	on t1.dnrecws = t2.dnrecws
+	order by t1.dnrecws
 ) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws
 ;
 
 ---------------------------------------------------------------
@@ -212,53 +200,54 @@ where a.comid = b.comid
 -- Untreated Sewage Delivered to Septics (billions) = Unsewered dwelling units * Avg. Person/DU * Water Use (GPCD) * constant * FC (MPN/100ml)
 -- Bacteria (bn/yr) = (untreated sewage delivered to septics * failure rates * normal delivery ratio * % septics not near waterway * normal bacteria decay %) + (delivery ratio adjacent to waterway * % septics near waterway * bacteria decay adjacent to waterway)
 
-alter table spatial.nhdplus_tdec add column septic_bnmpn_yr numeric(12,2);
-alter table spatial.nhdplus_tdec add column petwaste_bnmpn_yr numeric(12,2);
-alter table spatial.nhdplus_tdec add column illicitconn_bnmpn_yr numeric(12,2);
+alter table spatial.dnrecws_tdec add column septic_bnmpn_yr numeric(12,2);
+alter table spatial.dnrecws_tdec add column petwaste_bnmpn_yr numeric(12,2);
+alter table spatial.dnrecws_tdec add column illicitconn_bnmpn_yr numeric(12,2);
 
-update spatial.nhdplus_tdec a 
+update spatial.dnrecws_tdec a 
 set septic_bnmpn_yr = b.septic_bnmpn_yr,
 	petwaste_bnmpn_yr = b.petwaste_bnmpn_yr,
 	illicitconn_bnmpn_yr = b.illicitconn_bnmpn_yr
 from (
-	select comid, 
+	select dnrecws, 
 	(coalesce(n_septic_systems,0) * 2.514 * 70.0 * 0.0000138 * 10000000.0) * 0.2 * (0.5 * (1 - 0.0483) * 0.002 + 1.0 * 0.0483 *0.13 ) as septic_bnmpn_yr,
 	-- Pet Waste Load
 	(((coalesce(acs_du,0.0) * 0.4) * (1 - 0.0) * 0.05) + ((coalesce(acs_du,0.0) * 0.4) * 0.0 * 1.0)) * 0.5 * 0.4 * 0.32 * 10.0 * 365.0 as petwaste_bnmpn_yr,
 	-- Illicit Connections Load
 	(2.514 * 70.0 * 10000000.0 * (coalesce(acs_du,0.0) * 0.001)) * 0.0000138 as illicitconn_bnmpn_yr
 
-	from spatial.nhdplus_tdec
+	from spatial.dnrecws_tdec
 	order by septic_bnmpn_yr desc
 ) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws
 ;
 
-alter table bridges."bridges.nhdxuvmlc" rename to nhdxuvmlc
+alter table bridges."bridges.dnrecwsxuvmlc" rename to dnrecwsxuvmlc;
+
+select * from spatial.dnrecws_tdec;
 
 ---------------------------------------------------------------
 ---------------------------------------------------------------
 -- Watershed Water Volume and ACRES OF URBAN
-alter table spatial.nhdplus_tdec add column urban_tot_ac numeric(12,2);
-alter table spatial.nhdplus_tdec add column urban_imp_ac numeric(12,2);
-alter table spatial.nhdplus_tdec add column urban_turf_ac numeric(12,2);
+alter table spatial.dnrecws_tdec add column urban_tot_ac numeric(12,2);
+alter table spatial.dnrecws_tdec add column urban_imp_ac numeric(12,2);
+alter table spatial.dnrecws_tdec add column urban_turf_ac numeric(12,2);
 
-update spatial.nhdplus_tdec a
+update spatial.dnrecws_tdec a
 set urban_tot_ac = b.urban_tot_ac,
 	urban_imp_ac = b.urban_imp_ac,
 	urban_turf_ac = b.urban_turf_ac
 from (
-	select comid
+	select dnrecws
 	, urban_tot_ac
 	, urban_imp_ac
 	, case
 		when urban_tot_ac > 0.0 and (urban_imp_ac + urban_turf_ac) > urban_tot_ac then urban_tot_ac - urban_imp_ac
 		else urban_turf_ac end as urban_turf_ac
 	from (
-		select a.comid, 
+		select a.dnrecws, 
 		--(b.histo_21 + b.histo_22 + b.histo_23 + b.histo_24)*900.0 / 4046.86 as urban_tot_ac,
 		(d.histo_1 + d.histo_2 + d.histo_3 + d.histo_9 + d.histo_11*0.7 + d.histo_12*0.5 + d.histo_13*0.3 + d.histo_14 + d.histo_15) / 4046.86 as urban_tot_ac,
-		
 
 		case
 			when ((c.histo_7 + c.histo_8 + c.histo_9 + c.histo_10 + c.histo_11 + c.histo_12) / 4046.86) > (b.histo_21 + b.histo_22 + b.histo_23 + b.histo_24)*900.0 / 4046.86
@@ -269,89 +258,115 @@ from (
 		-- coefficients in metadata for fractional turf use classes
 		(d.histo_9 + d.histo_11*0.7 + d.histo_12*0.5 + d.histo_13*0.3 + d.histo_15) / 4046.86 as urban_turf_ac
 
-		from spatial.nhdplus_tdec as a
-		left join bridges.nhdxnlcd2016 as b
-		on a.comid = b.comid
-		left join bridges.nhdxuvmlc as c
-		on a.comid = c.comid
-		left join bridges.nhdxuvmlu as d
-		on a.comid = d.comid
+		from spatial.dnrecws_tdec as a
+		left join bridges.dnrecwsxnlcd2016 as b
+		on a.basins_id = b.basins_id
+		left join bridges.dnrecwsxuvmlc as c
+		on a.basins_id = c.basins_id
+		left join bridges.dnrecwsxuvmlu as d
+		on a.basins_id = d.basins_id
 	) as t1
 ) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws
 ;
 
-alter table spatial.nhdplus_tdec add column watershed_wqv_cf numeric(12,2);
+alter table spatial.dnrecws_tdec add column watershed_wqv_cf numeric(12,2);
 
-update spatial.nhdplus_tdec a set watershed_wqv_cf = b.watershed_wqv_cf
+update spatial.dnrecws_tdec a set watershed_wqv_cf = b.watershed_wqv_cf
 from (
-	select comid, 
+	select dnrecws, 
 	1.0 * ( urban_tot_ac * 0.950 + urban_turf_ac * 0.202) * 3630 as watershed_wqv_cf
-	from spatial.nhdplus_tdec
+	from spatial.dnrecws_tdec
 	) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws
+;
 
 ---------------------------------------------------------------
 -- ADD IN TOTAL ACRES OF AG, FOREST and WATER
-alter table spatial.nhdplus_tdec add column ag_tot_ac numeric(12,2);
-alter table spatial.nhdplus_tdec add column nat_tot_ac numeric(12,2);
-alter table spatial.nhdplus_tdec add column water_tot_ac numeric(12,2);
+alter table spatial.dnrecws_tdec add column ag_tot_ac numeric(12,2);
+alter table spatial.dnrecws_tdec add column nat_tot_ac numeric(12,2);
+alter table spatial.dnrecws_tdec add column water_tot_ac numeric(12,2);
 
-update spatial.nhdplus_tdec a
+update spatial.dnrecws_tdec a
 set ag_tot_ac = b.ag_tot_ac,
 	nat_tot_ac = b.nat_tot_ac,
 	water_tot_ac = b.water_tot_ac
 from (
-	select a.comid,
+	select a.dnrecws,
 	-- The dataset does not have pasture in DE?
 	--(b.histo_13*0.1 + b.histo_16 + b.histo_17) / 4046.86 as ag_tot_ac,
 	(b.histo_13*0.1 + b.histo_16) / 4046.86 as ag_tot_ac,
 	(b.histo_5 + b.histo_6 + b.histo_7 + b.histo_8 + b.histo_10 + b.histo_11*0.3 + b.histo_12*0.5 + b.histo_13*0.6) / 4046.86 as nat_tot_ac,
 	(b.histo_4) / 4046.86 as water_tot_ac
-	from spatial.nhdplus_tdec as a
-	left join bridges.nhdxuvmlu as b
-	on a.comid = b.comid
+	from spatial.dnrecws_tdec as a
+	left join bridges.dnrecwsxuvmlu as b
+	on a.basins_id = b.basins_id
 ) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws
 ;
 
 ---------------------------------------------------------------
 ---------------------------------------------------------------
 ---------------------------------------------------------------------------------
 -- GET THE URBAN, AG, NATURAL, AND WATER LOADS. USED MEDIAN FC EMC FOR DEVELOPED CLASSES (7772.5). THIS ALL SEEMS RATHER SUBJECTIVE...
-alter table spatial.nhdplus_tdec add column precip_inyr numeric(7,4);
 
-alter table spatial.nhdplus_tdec add column runoff_urb_inyr numeric(7,4);
-alter table spatial.nhdplus_tdec add column runoff_urb_acftyr numeric(8,4);
-alter table spatial.nhdplus_tdec add column urbanloading_bnmpn_acyr numeric(8,4);
-alter table spatial.nhdplus_tdec add column urbanload_bnmpn_yr numeric(12,4);
+alter table spatial.dnrecws_tdec DROP column precip_inyr;
 
-alter table spatial.nhdplus_tdec add column runoff_imp_inyr numeric(7,4);
-alter table spatial.nhdplus_tdec add column runoff_imp_acftyr numeric(10,4);
-alter table spatial.nhdplus_tdec add column imploading_bnmpn_acyr numeric(10,4);
-alter table spatial.nhdplus_tdec add column impload_bnmpn_yr numeric(14,4);
+alter table spatial.dnrecws_tdec DROP column runoff_urb_inyr;
+alter table spatial.dnrecws_tdec DROP column runoff_urb_acftyr;
+alter table spatial.dnrecws_tdec DROP column urbanloading_bnmpn_acyr;
+alter table spatial.dnrecws_tdec DROP column urbanload_bnmpn_yr;
 
-alter table spatial.nhdplus_tdec add column runoff_turf_inyr numeric(7,4);
-alter table spatial.nhdplus_tdec add column runoff_turf_acftyr numeric(10,4);
-alter table spatial.nhdplus_tdec add column turfloading_bnmpn_acyr numeric(10,4);
-alter table spatial.nhdplus_tdec add column turfload_bnmpn_yr numeric(14,4);
+alter table spatial.dnrecws_tdec DROP column runoff_ag_inyr;
+alter table spatial.dnrecws_tdec DROP column runoff_ag_acftyr;
+alter table spatial.dnrecws_tdec DROP column agloading_bnmpn_acyr;
+alter table spatial.dnrecws_tdec DROP column agload_bnmpn_yr;
 
-alter table spatial.nhdplus_tdec add column runoff_ag_inyr numeric(7,4);
-alter table spatial.nhdplus_tdec add column runoff_ag_acftyr numeric(8,4);
-alter table spatial.nhdplus_tdec add column agloading_bnmpn_acyr numeric(8,4);
-alter table spatial.nhdplus_tdec add column agload_bnmpn_yr numeric(12,4);
+alter table spatial.dnrecws_tdec DROP column runoff_nat_inyr;
+alter table spatial.dnrecws_tdec DROP column runoff_nat_acftyr;
+alter table spatial.dnrecws_tdec DROP column natloading_bnmpn_acyr;
+alter table spatial.dnrecws_tdec DROP column natload_bnmpn_yr;
 
-alter table spatial.nhdplus_tdec add column runoff_nat_inyr numeric(7,4);
-alter table spatial.nhdplus_tdec add column runoff_nat_acftyr numeric(8,4);
-alter table spatial.nhdplus_tdec add column natloading_bnmpn_acyr numeric(8,4);
-alter table spatial.nhdplus_tdec add column natload_bnmpn_yr numeric(12,4);
+alter table spatial.dnrecws_tdec DROP column runoff_water_inyr;
+alter table spatial.dnrecws_tdec DROP column runoff_water_acftyr;
+alter table spatial.dnrecws_tdec DROP column waterloading_bnmpn_acyr;
+alter table spatial.dnrecws_tdec DROP column waterload_bnmpn_yr;
 
-alter table spatial.nhdplus_tdec add column runoff_water_inyr numeric(7,4);
-alter table spatial.nhdplus_tdec add column runoff_water_acftyr numeric(8,4);
-alter table spatial.nhdplus_tdec add column waterloading_bnmpn_acyr numeric(8,4);
-alter table spatial.nhdplus_tdec add column waterload_bnmpn_yr numeric(12,4);
+---
 
-update spatial.nhdplus_tdec a
+alter table spatial.dnrecws_tdec add column precip_inyr numeric(7,4);
+
+alter table spatial.dnrecws_tdec add column runoff_urb_inyr numeric(7,4);
+alter table spatial.dnrecws_tdec add column runoff_urb_acftyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column urbanloading_bnmpn_acyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column urbanload_bnmpn_yr numeric(14,4);
+
+alter table spatial.dnrecws_tdec add column runoff_imp_inyr numeric(7,4);
+alter table spatial.dnrecws_tdec add column runoff_imp_acftyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column imploading_bnmpn_acyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column impload_bnmpn_yr numeric(14,4);
+
+alter table spatial.dnrecws_tdec add column runoff_turf_inyr numeric(7,4);
+alter table spatial.dnrecws_tdec add column runoff_turf_acftyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column turfloading_bnmpn_acyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column turfload_bnmpn_yr numeric(14,4);
+
+alter table spatial.dnrecws_tdec add column runoff_ag_inyr numeric(7,4);
+alter table spatial.dnrecws_tdec add column runoff_ag_acftyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column agloading_bnmpn_acyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column agload_bnmpn_yr numeric(14,4);
+
+alter table spatial.dnrecws_tdec add column runoff_nat_inyr numeric(7,4);
+alter table spatial.dnrecws_tdec add column runoff_nat_acftyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column natloading_bnmpn_acyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column natload_bnmpn_yr numeric(14,4);
+
+alter table spatial.dnrecws_tdec add column runoff_water_inyr numeric(7,4);
+alter table spatial.dnrecws_tdec add column runoff_water_acftyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column waterloading_bnmpn_acyr numeric(10,4);
+alter table spatial.dnrecws_tdec add column waterload_bnmpn_yr numeric(14,4);
+
+update spatial.dnrecws_tdec a
 set precip_inyr = b.precip_inyr,
 	runoff_urb_inyr = b.runoff_urb_inyr,
 	runoff_urb_acftyr = b.runoff_urb_acftyr,
@@ -384,7 +399,7 @@ set precip_inyr = b.precip_inyr,
 	waterload_bnmpn_yr = b.waterload_bnmpn_yr
 
 from (
-	select comid, 
+	select dnrecws, 
 	urban_tot_ac, 
 	precip_inyr, 
 
@@ -422,8 +437,8 @@ from (
 
 
 	from (
-		select comid, 
-		urban_tot_ac,  
+		select dnrecws, 
+		urban_tot_ac, 
 		urban_imp_ac,
 		urban_turf_ac,
 		ag_tot_ac,
@@ -449,10 +464,10 @@ from (
 			else ((urban_turf_ac/urban_tot_ac * 0.202)) * 0.9 * (precipmm_ma/25.4) 
 			end as runoff_turf_inyr
 
-		from spatial.nhdplus_tdec
+		from spatial.dnrecws_tdec
 	) as t1
 ) as b
-where a.comid = b.comid
+where a.dnrecws = b.dnrecws
 ;
 
 select urban_tot_ac - (urban_imp_ac+urban_turf_ac) as test,
@@ -466,16 +481,16 @@ turfload_bnmpn_yr,
 runoff_urb_inyr,
 runoff_imp_inyr,
 runoff_turf_inyr
-from spatial.nhdplus_tdec
+from spatial.dnrecws_tdec
 
 
 --------------------------------------------------------------------------------
--- FINAL NHD TABLE!!!
-drop table if exists dnrec.nhdplus_tdec_bacterialoading;
-create table dnrec.nhdplus_tdec_bacterialoading
+-- FINAL dnrecws TABLE!!!
+drop table if exists dnrec.dnrecws_tdec_bacterialoading;
+create table dnrec.dnrecws_tdec_bacterialoading
 as
 
-select comid, nord, nordstop	
+select dnrecws
 ,acs_pop			
 ,acs_du			
 ,n_septic_systems	
@@ -530,9 +545,9 @@ select comid, nord, nordstop
 ,(septic_bnmpn_yr + petwaste_bnmpn_yr + illicitconn_bnmpn_yr) as secondaryload_bnmpn_yr
 
 ,(urbanload_bnmpn_yr + agload_bnmpn_yr + natload_bnmpn_yr + septic_bnmpn_yr + petwaste_bnmpn_yr + illicitconn_bnmpn_yr) as totalload_bnmpn_yr
-,catchment as geom
+,geom as geom
 --, countyfp10
-from spatial.nhdplus_tdec as a
+from spatial.dnrecws_tdec as a
 --left join (select * from spatial.census_county /*where countyfp10 != '029' and countyfp10 != '045'*/) as b
 --on st_intersects(st_centroid(a.geom),b.geom)
 --where countyfp10 is null or countyfp10 not like '029'
@@ -544,17 +559,18 @@ where (urban_imp_ac
 
 ;
 
-alter table dnrec.nhdplus_tdec_bacterialoading add constraint pk_nhdplus_tdec_bacterialoading primary key(comid);
-create index nhdplus_tdec_bacterialoading_geom_idx
-on dnrec.nhdplus_tdec_bacterialoading
+alter table dnrec.dnrecws_tdec_bacterialoading add constraint pk_dnrecws_tdec_bacterialoading primary key(dnrecws);
+create index dnrecws_tdec_bacterialoading_geom_idx
+on dnrec.dnrecws_tdec_bacterialoading
 using gist(geom);
 
-select * from dnrec.nhdplus_tdec_bacterialoading;
+select * from dnrec.dnrecws_tdec_bacterialoading where "acs_pop" >= 0;
 
 ---------------------------------------------------------------------------------------------------
+-- ONLY USE FOR NHDPLUS LAYER
 -- WATERSHED LOADS
 
-create table dnrec.nhdplus_tdec_bacterialoading_ws
+create table dnrec.dnrecws_tdec_bacterialoading_ws
 as
 
 select t1.*, t2.geom
@@ -564,12 +580,12 @@ from (
 	sum(agload_bnmpn_yr) as agload_bnmpn_yr,
 	sum(natload_bnmpn_yr) as natload_bnmpn_yr
 	--geom
-	from dnrec.nhdplus_tdec_bacterialoading as a
-	join (select nord, nordstop from dnrec.nhdplus_tdec_bacterialoading) as idx
+	from dnrec.dnrecws_tdec_bacterialoading as a
+	join (select nord, nordstop from dnrec.dnrecws_tdec_bacterialoading) as idx
 	on a.nord between idx.nord and idx.nordstop
 	group by idx.nord
 ) as t1
-left join dnrec.nhdplus_tdec_bacterialoading as t2
+left join dnrec.dnrecws_tdec_bacterialoading as t2
 on t1.nord = t2.nord
 ;
 

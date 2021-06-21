@@ -577,6 +577,9 @@ order by a.staid, a.outfall_bay, a.n_years, b.watershed_name
 
 select * from dnrec.flow_watershed_final;
 
+insert into dnrec.flow_watershed_final (watershed_name, geom_dnrec)
+select watershed, geom from spatial.dnrec_watersheds where  id = 46;
+
 select staid			
 ,staname			
 ,n_years			

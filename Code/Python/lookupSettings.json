@@ -1,11 +1,83 @@
 {
   "coefs": {
     "Forest Buffer": {
-      "removal_rate": 0.42,
       "runoff_redux": 0.75,
-      "rr_a_weighted": 0.75,
-      "efficiency": 0.0,
-      "per_acre": 51.3
+      "unreduced_runoff": 0.25,
+      "removal_rate": 0.42,
+      "tot_removal_rate": 0.855,
+      "design_discount": 0.6,
+      "maint_discount": 0.5,
+      "discount_rate": 0.3,
+      "imperv_runoff_coef": 0.95,
+      "perv_runoff_coef": 0.202
+    },
+    "Runoff Reduction": {
+      "runoff_redux": 0.36,
+      "unreduced_runoff": 0.64,
+      "removal_rate": 0.32,
+      "tot_removal_rate": 0.565,
+      "design_discount": 1.0,
+      "maint_discount": 0.9,
+      "discount_rate": 0.9,
+      "imperv_runoff_coef": 0.95,
+      "perv_runoff_coef": 0.202
+    },
+    "RR": {
+      "runoff_redux": 0.36,
+      "unreduced_runoff": 0.64,
+      "removal_rate": 0.32,
+      "tot_removal_rate": 0.565,
+      "design_discount": 1.0,
+      "maint_discount": 0.9,
+      "discount_rate": 0.9,
+      "imperv_runoff_coef": 0.95,
+      "perv_runoff_coef": 0.202
+    },
+    "Stormwater Treatment": {
+      "runoff_redux": 0.15,
+      "unreduced_runoff": 0.85,
+      "removal_rate": 0.41,
+      "tot_removal_rate": 0.499,
+      "design_discount": 1.0,
+      "maint_discount": 0.9,
+      "discount_rate": 0.9,
+      "imperv_runoff_coef": 0.95,
+      "perv_runoff_coef": 0.202
+    },
+    "ST": {
+      "runoff_redux": 0.15,
+      "unreduced_runoff": 0.85,
+      "removal_rate": 0.41,
+      "tot_removal_rate": 0.499,
+      "design_discount": 1.0,
+      "maint_discount": 0.9,
+      "discount_rate": 0.9,
+      "imperv_runoff_coef": 0.95,
+      "perv_runoff_coef": 0.202
+    },
+    "Septic Denitrifcation and Pumping": {
+      "base_failure_rate": 0.2,
+      "retired_failure_rate": 0.5,
+      "norm_del_ratio": 0.5,
+      "norm_bac_decay": 0.002,
+      "bac_log_redux": 1.0
+    },
+    "Septic Connection": {
+      "base_failure_rate": 0.2,
+      "retired_failure_rate": 0.5,
+      "norm_del_ratio": 0.5,
+      "norm_bac_decay": 0.002,
+      "bac_log_redux": 1.0
+    },
+    "Sliplines (miles)": {
+      "overflow_per_mi": 0.143,
+      "vol_per_overflow": 90000.0,
+      "bn_bac_constant": 0.00038
+    },
+    "Sliplines": {
+      "overflow_per_mi": 0.143,
+      "vol_per_overflow": 90000.0,
+      "bn_bac_constant": 0.00038
     },
     "Land Retirement": {
       "removal_rate": 0.42,
@@ -14,52 +86,12 @@
       "efficiency": 0.0,
       "per_acre": 51.3
     },
-    "Runoff Reduction": {
-      "removal_rate": 0.70,
-      "runoff_redux": 0.50,
-      "rr_a_weighted": 0.50
-    },
-    "RR": {
-      "removal_rate": 0.70,
-      "runoff_redux": 0.50,
-      "rr_a_weighted": 0.50
-    },
-    "Stormwater Treatment": {
-      "removal_rate": 0.42,
-      "runoff_redux": 0.75,
-      "rr_a_weighted": 0.75
-    },
-    "ST": {
-      "removal_rate": 0.42,
-      "runoff_redux": 0.75,
-      "rr_a_weighted": 0.75
-    },
-    "Septic Denitrifcation and Pumping": {
-      "removal_rate": 0.42,
-      "runoff_redux": 0.75,
-      "rr_a_weighted": 0.75
-    },
-    "Septic Connection": {
-      "removal_rate": 0.42,
-      "runoff_redux": 0.75,
-      "rr_a_weighted": 0.75
-    },
     "Impervious surface elimination to pervious surface": {
       "removal_rate": 0.42,
       "runoff_redux": 0.75,
       "rr_a_weighted": 0.75
     },
     "Impervious Surface Elimination to Pervious Surface": {
-      "removal_rate": 0.42,
-      "runoff_redux": 0.75,
-      "rr_a_weighted": 0.75
-    },
-    "Pet Waste Education": {
-      "removal_rate": 0.42,
-      "runoff_redux": 0.75,
-      "rr_a_weighted": 0.75
-    },
-    "Sliplines (miles)": {
       "removal_rate": 0.42,
       "runoff_redux": 0.75,
       "rr_a_weighted": 0.75
@@ -78,7 +110,8 @@
      "Impervious surface elimination to pervious surface",
      "Impervious Surface Elimination to Pervious Surface",
      "Pet Waste Education",
-     "Sliplines"
+     "Sliplines",
+     "Sliplines (miles)"
   ],
 
   "bmp_ids": {
