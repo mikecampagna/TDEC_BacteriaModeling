@@ -1,486 +1,199 @@
 import json
 import requests
-import geojson
 import psycopg2
 from psycopg2 import sql
 from psycopg2 import extensions as ext
 
-from shapely.geometry import LineString
-from shapely.ops import transform
-from shapely.geometry import shape
-from functools import partial
-import pyproj
-from math import radians, cos, sin, asin, sqrt
-
 # Unless explicitly stated otherwise, all areas are in acres
 # Create CLass BMP
 class WatershedTreatmentModel:
-    def __init__(self,_jsonIn, _PG_datafiles):
-        self.__bmp_type = ''                # TODO: user input parse
-        self.__bmp_id = 0                   # TODO: user input parse
-        self.__huc12 = '000000000000'       # TODO: user input parse
-        self.__nhd_comid = 0                # TODO: user input parse
+    def __init__(self,_jsonIn, _pg_datafiles):
+        self.__bmp_geometry = None
+        self.__bmp_type = None
+        self.__bmp_id = None
+        self.__nhd_comid = None
+        self.__huc12 = None
+        self.__dnrec_basin_id = None
+        self.__drainage_ac = 0.0
+        self.__percent_impervious = 0.0
+        self.__runoff_capture_in = 1.0
+        self.__acres_converted = 0.0
+        self.__landuse_converted = 'None'
+        self.__converted_to = 'None'
+        self.__fraction_willing = 0.6
+        self.__awareness = 0.0
+        self.__n_systems_treated = 0.0
+        self.__n_systems_retired = 0.0
+        self.__sewer_miles = 0.0
+        self.__slipline_miles = 0.0
 
-        # LandUse-LandCover Data
-        self.__lulc = {}                    # dict {lc1: 0.0, lc2...}
-        self.__lulc_groups = {}             # dict {lc1: {imperv: 0.0, turf: 0.0, forest: 0.0}, lc2...}
-        self.__lulc_fc_emc = {}             # dict {lc1: 0.0, lc2...}
-        self.__lulc_fc_export_coef = {}     # dict {lc1: 0.0, lc2...}
-        self.__fraction_imperv = 0.0
-        self.__fration_turf = 0.0
-        self.__fration_forest = 0.0
-        self.__urban_imperv_area = 0.0
-        self.__total_imperv_area = 0.0
-        self.__urban_turf_area = 0.0
-        self.__total_turf_area = 0.0
+        self.__bac_load_data = []
+        self.__watershed_population = 0.0
+        self.__watershed_du = 0.0
+        self.__bac_reduction = 0.0
+        self.__bac_initial_load = 0.0
+        self.__bac_reduced_load = 0.0
+        self.__coefs = []
+        self.__bmp_names = []
+        self.__watershed_urb_load = 0.0
+        self.__watershed_urb_area = 0.0
+        self.__wqv_watershed = 0.0
+        self.__n_septic_systems = 0.0
+        self.__watershed_septic_load = 0.0
+        self.__watershed_septic_bn_yr = 0.0
+        self.__petwaste_bnmpn_yr = 0.0
+        self.__urbanloading_bnmpn_acyr = 0.0
+        self.__imploading_bnmpn_acyr = 0.0
+        self.__turfloading_bnmpn_acyr = 0.0
+        self.__agloading_bnmpn_acyr = 0.0
+        self.__natloading_bnmpn_acyr = 0.0
 
-        # Watershed Data
-        self.__annual_rainfall_in = 0.0
-        self.__watershed_area = 0.0
-        self.__number_du = 0.0
-        self.__people_per_du = 2.7
-        self.__population = 0.0
-        self.__wateruse_gpcd = 70
-        self.__soil_fraction = {a: 13.8, b: 54.1, c: 25.4, d: 6.8}
-        self.__runoff_coeffs = {a: {imperv: 0.95, turf: 0.15, forest: 0.02, rural: 0.02, active_constr: 0.5, water: 1.0},
-                                b: {imperv: 0.95, turf: 0.20, forest: 0.03, rural: 0.03, active_constr: 0.5, water: 1.0},
-                                c: {imperv: 0.95, turf: 0.22, forest: 0.04, rural: 0.04, active_constr: 0.5, water: 1.0},
-                                d: {imperv: 0.95, turf: 0.25, forest: 0.05, rural: 0.05, active_constr: 0.5, water: 1.0}}
+        self.__description = 'None'
 
-        # BMPs
-        self.__bmp_discounts = {capture: 0.9, design: 1.2, maintenance: 0.9}
-
-
-
-        self.__GeomBmp  = []
-        self.__GeomWatershed = []
-        self.__Description =  ''
-        self.__PG_datafiles = {}
-        self.__PG_Connection = ()
-        self.__AcresTreated = 0.0
-        self.__Implemented = False
-        self.__NumberOfUnits = 0.0
+        self.__pg_datafiles = {}
+        self.__pg_connection = ()
 
         ## Run input functions to load JSON objects
-        self.setSettings(_jsonIn, _PG_datafiles)
+        self.setSettings(_jsonIn, _pg_datafiles)
 
     # Load input json
     # Load coefs from settings
-    def setSettings(self,_jsonIn, _PG_datafiles):
+    def setSettings(self,_jsonIn, _pg_datafiles):
         for _key in _jsonIn.keys():
             if _key == 'bmp_geometry':
-                self.setGeomBmp(_jsonIn[_key])
+                self.__bmp_geometry = _jsonIn[_key]
 
             if _key == 'bmp_type':
-                self.setBmpType(_jsonIn[_key])
+                self.__bmp_type = _jsonIn[_key]
 
             if _key == 'bmp_id':
-                self.setBmpType(_jsonIn[_key])
+                self.__bmp_id = _jsonIn[_key]
 
             if _key == 'nhd_comid':
-                self.setBmpType(_jsonIn[_key])
+                self.__nhd_comid = _jsonIn[_key]
 
             if _key == 'huc12':
-                self.setBmpType(_jsonIn[_key])
+                self.__huc12 = _jsonIn[_key]
+
+            if _key == 'dnrec_basin_id':
+                self.__dnrec_basin_id = _jsonIn[_key]
 
             if _key == 'drainage_ac':
-                self.setAcresTreated(_jsonIn[_key])
+                self.__drainage_ac = _jsonIn[_key]
 
             if _key == 'percent_impervious':
-                self.setPercentImpervious(_jsonIn[_key])
+                self.__percent_impervious = _jsonIn[_key] / 100.0
 
             if _key == 'runoff_capture_in':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__runoff_capture_in = _jsonIn[_key]
 
             if _key == 'acres_converted':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__acres_converted = _jsonIn[_key]
 
             if _key == 'landuse_converted':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__landuse_converted = _jsonIn[_key]
 
             if _key == 'converted_to':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__converted_to = _jsonIn[_key]
 
             if _key == 'fraction_willing':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__fraction_willing = _jsonIn[_key]
 
             if _key == 'awareness':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__awareness = _jsonIn[_key]
 
             if _key == 'n_systems_treated':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__n_systems_treated = _jsonIn[_key]
 
             if _key == 'n_systems_retired':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__n_systems_retired = _jsonIn[_key]
 
             if _key == 'sewer_miles':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__sewer_miles = _jsonIn[_key]
 
             if _key == 'slipline_miles':
-                self.setRunoffCapture(_jsonIn[_key])
+                self.__slipline_miles = _jsonIn[_key]
 
 
-        self.__PG_Connection = psycopg2.connect(
-                host=_PG_datafiles["host"] ,
-                database=_PG_datafiles["database"] ,
-                user=_PG_datafiles["user"] ,
-                password=_PG_datafiles["password"] ,
-                port= _PG_datafiles["port"] )
+        self.__pg_connection = psycopg2.connect(
+                host=_pg_datafiles["host"] ,
+                database=_pg_datafiles["database"] ,
+                user=_pg_datafiles["user"] ,
+                password=_pg_datafiles["password"] ,
+                port= _pg_datafiles["port"] )
 
-        with open('config/lookupSettings.json') as _jf:
+        with open('lookupSettings.json') as _jf:
             settings = json.load(_jf)
-            self.__Coefs = settings['coefs']
-            self.__Load_Coefs_Kgacreyr = settings['load_coefs_kgacreyr']
-            self.__Pollutants = settings['pollutants']
-            self.__BmpTypes = set(settings['bmptypes'])
-            self.__Animals = settings['animals']
-            self.__Delivery = settings['delivery']
-            #if self.__Watershed == 'Delaware':
-            #    self.__Lulcs = settings['lulc']['nlcd2011']
-            #elif self.__Watershed == 'Delaware':
-            #    #self.__Lulcs = settings['lulc']['cb2009']
+            self.__coefs = settings['coefs']
+            self.__bmp_names = settings['bmp_names']
 
-        __PG_datafiles = _PG_datafiles
-
-    def __str__(self):
-        _return = ''
-        if self.isValid():
-            pass
-        else:
-            print("Reductions not yet computed")
-        return _return
-
-    def __len__(self):
-        if self.isValid():
-            return 1
-        else:
-            return 0
-
-    def setBmpType(self, _value):
-        self.__BmpType = _value
-
-    def getBmpType(self):
-        return self.__BmpType
-
-    def getAcresTreated(self):
-        # If they did not provide the acres treated, assume that the polygon submitted is the drainage area
-        if self.__AcresTreated == 0.0:
-            if self.getBmpGroup() == 'Urban Stormwater Management':
-                shapein = shape(self.getGeomWatershed())
-                proj = partial(pyproj.transform, pyproj.Proj(init='epsg:4326'), pyproj.Proj(init='epsg:32618'))
-                shapein_proj = transform(proj, shapein)
-                self.setAcresTreated(shapein_proj.area / 4046.86)
-                print('no acres given, use: {}'.format(shapein_proj.area / 4046.86))
-            elif eval(str(self.getGeomBmp()))['type'] == 'Polygon':
-                shapein = shape(self.getGeomBmp())
-                proj = partial(pyproj.transform, pyproj.Proj(init='epsg:4326'), pyproj.Proj(init='epsg:32618'))
-                shapein_proj = transform(proj, shapein)
-                self.setAcresTreated(shapein_proj.area/4046.86)
-                print('no acres given, use: {}'.format(shapein_proj.area/4046.86))
-        return self.__AcresTreated
-
-    def getPercentImpervious(self):
-        if self.__PercentImpervious == 0.0:
-            impervious = 0.0
-            if '21' in self.__Lulcs:
-                impervious += self.__Lulcs['22'] * 0.10
-            if '22' in self.__Lulcs:
-                impervious += self.__Lulcs['22'] * 0.35
-            if '23' in self.__Lulcs:
-                impervious += self.__Lulcs['23'] * 0.65
-            if '24' in self.__Lulcs:
-                impervious += self.__Lulcs['24'] * 0.90
-            self.setPercentImpervious(impervious)
-            print('no impervious acres given, use: {}\nEstimated from LULC in watershed.'.format(impervious))
-        return self.__PercentImpervious
-
-    def getRunoffCapture(self):
-        if self.__RunoffCapture == 0.0:
-            self.setRunoffCapture(1.0)
-            print('no runoff capture given, use: {}'.format(1.0))
-        return self.__RunoffCapture
-
-    def haversine(self, lat1,lon1,lat2,lon2):
-        """
-        Calculate the great circle distance between two points
-        on the earth (specified in decimal degrees)
-        """
-        # convert decimal degrees to radians
-        lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-
-        # haversine formula
-        dlon = lon2 - lon1
-        dlat = lat2 - lat1
-        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-        c = 2 * asin(sqrt(a))
-        r = 20922430  # Radius of earth in ft
-        return c * r
-
-    #TODO: Make sure that this length calculation works across both watersheds
-    def setBmpLength(self):
-        coords1 = list(geojson.utils.coords(geojson.loads(str(self.getGeomBmp()).replace("\'", "\""))))
-        coords2 = [t[::-1] for t in coords1]
-        distance = 0.0
-        for i in range(0, len(coords2)-1):
-            point1 = coords2[i]
-            point2 = coords2[i + 1]
-            distance += self.haversine(point1[0], point1[1], point2[0], point2[1])
-        print(distance)
-        self.__BmpLength = distance
-
-    def setHuc12(self):
-        _geom = json.dumps(eval(str(self.getGeomBmp())))
-        try:
-            # TODO: Need to set the DB up with the data and some functions
-            self.__PG_Connection.set_isolation_level(0)
-            _cur = self.__PG_Connection.cursor()
-            if eval(str(self.getGeomBmp()))['type'] == 'Point':
-                _cur.execute("SELECT * FROM databmpapi.get_huc12_pt(%s);", (_geom,))
-            elif eval(str(self.getGeomBmp()))['type'] == 'LineString':
-                _cur.execute("SELECT * FROM databmpapi.get_huc12_ln(%s);", (_geom,))
-                self.setBmpLength()
-            else:
-                _cur.execute("SELECT * FROM databmpapi.get_huc12(%s);", (_geom,))
-                if self.getBmpLength() == 0:
-                    self.setBmpLength()
-            _data = _cur.fetchall()
-            self.__PG_Connection.commit()
-        except Exception as _e:
-            print(_e)
-            data = {"NOT IN BASIN": 0}
-
-        try:
-            self.__Huc12 = ''.join(_data[0])
-        except Exception as e:
-            print("Could not connect to the database.\n" + str(e))
+        __pg_datafiles = _pg_datafiles
 
     # To do mike call get information from postgres server # might want to combine with the setHuc12. above
-    def setLoad_Coefs_Kgacreyr(self):
-        if self.__Huc12[:4] in self.__drbHuc04:
-            if self.getBmpGroup() == 'Urban Stormwater Management':
-                try:
-                    self.__PG_Connection.set_isolation_level(0)
-                    _cur = self.__PG_Connection.cursor()
-                    _q1 = "SELECT * FROM databmpapi.get_loadedload_drb(\'{}\');".format(self.getHuc12())
-                    _cur.execute(_q1)
-                    _load = _cur.fetchall()
-                    self.__PG_Connection.commit()
-                except Exception as _e:
-                    print("Could not connect to the database to retrive loading:\n" + str(_e))
-            else:
-                try:
-                    self.__PG_Connection.set_isolation_level(0)
-                    _cur = self.__PG_Connection.cursor()
-                    _q1 = "SELECT * FROM databmpapi.get_load_drb(\'{}\');".format(self.getHuc12())
-                    _cur.execute(_q1)
-                    _load = _cur.fetchall()
-                    self.__PG_Connection.commit()
-                except Exception as _e:
-                    print("Could not connect to the database to retrive loading:\n" + str(_e))
-        elif any(self.__Huc12[:4] in s for s in self.__cbbHuc04):
-            if self.getBmpGroup() == 'Urban Stormwater Management':
-                try:
-                    self.__PG_Connection.set_isolation_level(0)
-                    _cur = self.__PG_Connection.cursor()
-                    _q1 = "SELECT * FROM databmpapi.get_loadedload_cbb(\'{}\');".format(self.getHuc12())
-                    _cur.execute(_q1)
-                    _load = _cur.fetchall()
-                    self.__PG_Connection.commit()
-                except Exception as _e:
-                    print("Could not connect to the database to retrive loading:\n" + str(_e))
-            else:
-                try:
-                    self.__PG_Connection.set_isolation_level(0)
-                    _cur = self.__PG_Connection.cursor()
-                    _q1 = "SELECT * FROM databmpapi.get_load_cbb(\'{}\');".format(self.getHuc12())
-                    _cur.execute(_q1)
-                    _load = _cur.fetchall()
-                    self.__PG_Connection.commit()
-                except Exception as _e:
-                    print("Could not connect to the database to retrive loading:\n" + str(_e))
+    def setBacteriaLoadData(self):
+        if self.__nhd_comid != None:
+            try:
+                self.__pg_connection.set_isolation_level(0)
+                _cur = self.__pg_connection.cursor()
+                _q = "SELECT * FROM dnrec.nhdplus_tdec_bacterialoading WHERE comid = {};".format(self.__nhd_comid)
+                _cur.execute(_q)
+                _load = _cur.fetchall()
+                self.__pg_connection.commit()
+            except Exception as _e:
+                print("Could not connect to the database to retrive loading:\n" + str(_e))
+        elif self.__huc12 != None:
+            try:
+                self.__pg_connection.set_isolation_level(0)
+                _cur = self.__pg_connection.cursor()
+                _q = "SELECT * FROM dnrec.huc12_tdec_bacterialoading WHERE huc12 LIKE '{}';".format(self.__huc12)
+                _cur.execute(_q)
+                _load = _cur.fetchall()
+                self.__pg_connection.commit()
+            except Exception as _e:
+                print("Could not connect to the database to retrive loading:\n" + str(_e))
+        elif self.__dnrec_basin_id != None:
+            try:
+                self.__pg_connection.set_isolation_level(0)
+                _cur = self.__pg_connection.cursor()
+                _q = "SELECT * FROM dnrec.dnrecws_tdec_bacterialoading WHERE dnrecws = {};".format(self.__dnrec_basin_id)
+                _cur.execute(_q)
+                _load = _cur.fetchall()
+                self.__pg_connection.commit()
+            except Exception as _e:
+                print("Could not connect to the database to retrive loading:\n" + str(_e))
         else:
-            print("Cannot Calculate LULC: Invalid geom for BMP.")
+            print('No valid geographic scale given.')
+
         try:
-            self.__Load_Coefs_Kgacreyr = json.loads(_load[0][0])
+            self.__bac_load_data = list(_load[0])
+            self.__watershed_population = float(self.__bac_load_data[1])
+            self.__watershed_du = float(self.__bac_load_data[2])
+            self.__watershed_urb_load = float(self.__bac_load_data[33])
+            self.__watershed_imp_load = float(self.__bac_load_data[34])
+            self.__watershed_turf_load = float(self.__bac_load_data[35])
+            self.__watershed_ag_load = float(self.__bac_load_data[36])
+            self.__watershed_nat_load = float(self.__bac_load_data[37])
+
+            self.__watershed_urb_area = float(self.__bac_load_data[7])
+            self.__watershed_imp_area = float(self.__bac_load_data[8])
+            self.__watershed_turf_area = float(self.__bac_load_data[9])
+            self.__watershed_ag_area = float(self.__bac_load_data[10])
+            self.__watershed_nat_area = float(self.__bac_load_data[11])
+
+            self.__wqv_watershed = float(self.__bac_load_data[13])
+            self.__n_septic_systems = float(self.__bac_load_data[3])
+            self.__watershed_septic_load = float(self.__bac_load_data[4])
+            self.__watershed_septic_bn_yr = float(self.__bac_load_data[43])
+            self.__petwaste_bnmpn_yr = float(self.__bac_load_data[5])
+
+            self.__urbanloading_bnmpn_acyr = float(self.__bac_load_data[28])
+            self.__imploading_bnmpn_acyr = float(self.__bac_load_data[29])
+            self.__turfloading_bnmpn_acyr = float(self.__bac_load_data[30])
+            self.__agloading_bnmpn_acyr = float(self.__bac_load_data[31])
+            self.__natloading_bnmpn_acyr = float(self.__bac_load_data[32])
+
         except Exception as e:
             print("Could not connect to the database.\n"+str(e))
-
-    # Get watershed boundary if input geometry is okay.
-    def setGeomWatershed(self):
-        if self.getGeomBmp():
-            _url = 'http://watersheds.cci.drexel.edu/api/watershedboundary/'
-            _payload = json.dumps(eval(str(self.getGeomBmp())))
-            _headers = {}
-            _r = requests.post(_url, data =_payload, headers= _headers)
-            if _r.reason == 'Internal Server Error':
-                _GeomWatershed = 'NULL'
-                print("Cannot Calculate Watershed: Invalid geometry for BMP.")
-            else:
-                _GeomWatershed = _r.text
-            self.__GeomWatershed = _GeomWatershed
-        else:
-            print("Cannot Calculate Watershed: Invalid geometry for BMP.")
-
-    # Get LULC distribution for watershed, call DRB v CBB API
-    def setLulc(self):
-        if self.__Huc12[:4] in self.__drbHuc04:
-            _url = "http://watersheds.cci.drexel.edu/api/fzs/"
-            _payload = geojson.loads(json.dumps(self.__GeomWatershed))
-            _headers = {}
-            _r = requests.post(_url, data=_payload, headers=_headers)
-            _Lulcs = eval(_r.text)
-            for k, v in _Lulcs.items():
-                _Lulcs[k] = (v)/4046.86
-            # TODO: Once the Fast Zonal API is fixed for bigger NLCD Grid We shouldn't need this
-            try:
-                if _Lulcs['12'] > 0:
-                    _Lulcs = {k: _Lulcs[k] - _Lulcs.get('12', 0) for k in _Lulcs}
-                    #_Lulcs = {k:v for k,v in _Lulcs.items() if v != 0}
-            except Exception as e:
-                pass
-            self.__Lulcs = _Lulcs
-        elif any(self.__Huc12[:4] in s for s in self.__cbbHuc04):
-            _url = "http://watersheds.cci.drexel.edu/api/fzs_cb10m/"
-            _payload = geojson.loads(json.dumps(self.__GeomWatershed))
-            _headers = {}
-            _r = requests.post(_url, data=_payload, headers=_headers)
-            _Lulcs = eval(_r.text)
-            for k, v in _Lulcs.items():
-                _Lulcs[k] = (v)/4046.86
-            self.__Lulcs = _Lulcs
-        else:
-            print("Cannot Calculate LULC: Invalid geom for BMP.")
-
-    # TODO: Update this function to work with the specific DB output
-    def reductionRiparian(self):
-        if not self.isValid():
-            for _pollutant in self.__Pollutants:
-                if self.__Huc12[:4] in self.__drbHuc04:
-                    try:
-                        for _lulc in self.__Load_Coefs_Kgacreyr[_pollutant]:
-                            #print("THIS IS POLUTANT {} THIS IS LULC {}".format(_pollutant,_lulc))
-                            #print("THIS IS THE LULC VALUE {}".format(self.__Lulcs[_lulc]))
-                            _value = self.__Coefs[self.getBmpType()][_pollutant] \
-                                 * self.__Load_Coefs_Kgacreyr[_pollutant][str(_lulc)] \
-                                 * self.__Lulcs[_lulc]
-                            self.__Polutants_Reduction_Kgyr[_pollutant] += _value
-                    except Exception as e:
-                        pass
-                    try:
-                        for _lulc in self.getLulcs():
-                            # print("THIS IS POLUTANT {} THIS IS LULC {}".format(_pollutant,_lulc))
-                            # print("THIS IS THE LULC VALUE {}".format(self.__Lulcs[_lulc]))
-                            _value = self.__Coefs[self.getBmpType()][_pollutant] \
-                                     * self.__Load_Coefs_Kgacreyr[_pollutant][str(_lulc)] \
-                                     * self.__Lulcs[_lulc]
-                            self.__Polutants_Reduction_Kgyr[_pollutant] += _value
-                    except Exception as e:
-                        print("Couldn't calculate load reduction in the DRB.\nContact: msc94@drexel.edu")
-                elif any(self.__Huc12[:4] in s for s in self.__cbbHuc04):
-                    for _lulc in self.getLulcs():
-                        #print("THIS IS POLUTANT {} THIS IS LULC {}".format(_pollutant,_lulc))
-                        #print("THIS IS THE LULC VALUE {}".format(self.__Lulcs[_lulc]))
-                        _value = self.__Coefs[self.getBmpType()][_pollutant] \
-                             * self.__Load_Coefs_Kgacreyr[_pollutant][str(_lulc)] \
-                             * self.__Lulcs[_lulc]
-                        self.__Polutants_Reduction_Kgyr[_pollutant] += _value
-        self.setValid(True)
-
-    def landLoads(self, lu_rid):
-        for _pollutant in self.__Pollutants:
-            _value = self.__Coefs[self.getBmpType()][_pollutant] \
-                     * self.__Load_Coefs_Kgacreyr[_pollutant][lu_rid] \
-                     * self.getAcresTreated()
-            self.__Polutants_Reduction_Kgyr[_pollutant] += _value
-
-    def reductionAgriculturalLand(self):
-        if not self.isValid():
-            _pas_type = ['Grazing Land Protection', 'Prescribed Grazing']
-            if self.getBmpType() in _pas_type:
-                if self.__Huc12[:4] in self.__drbHuc04:
-                    self.landLoads('81')
-                elif any(self.__Huc12[:4] in s for s in self.__cbbHuc04):
-                    self.landLoads('5')
-            else:
-                if self.__Huc12[:4] in self.__drbHuc04:
-                    self.landLoads('82')
-                elif any(self.__Huc12[:4] in s for s in self.__cbbHuc04):
-                    self.landLoads('0')
-        self.setValid(True)
-
-    def reductionStreamRestoration(self):
-        for _pollutant in self.__Pollutants:
-            if eval(str(self.getGeomBmp()))['type'] == 'LineString':
-                self.__Polutants_Reduction_Kgyr[_pollutant] += self.__Coefs[self.getBmpType()][_pollutant] * self.getBmpLength()
-            elif self.getBmpType() == 'Watering Facility':
-                print('WATERING FACILITY HEYY')
-                self.__Polutants_Reduction_Kgyr[_pollutant] += self.__Coefs[self.getBmpType()][_pollutant] * 209.0
-            elif eval(str(self.getGeomBmp()))['type'] == 'Polygon':
-                self.__Polutants_Reduction_Kgyr[_pollutant] += self.__Coefs[self.getBmpType()][_pollutant] * self.getBmpLength()
-            else:
-                self.__Polutants_Reduction_Kgyr[_pollutant] += self.__Coefs[self.getBmpType()][_pollutant] * self.getStreamFeetTreated()
-        for _pollutant in self.__Pollutants:
-            if self.getNumberOfUnits() > 1:
-                self.__Polutants_Reduction_Kgyr[_pollutant] = self.__Polutants_Reduction_Kgyr[_pollutant] * self.getNumberOfUnits()
-
-
-
-    # NOTE: this one does not actually need Coefs
-    def landLoadsReduce(self, lu_rid_pre, lu_rid_post):
-        for _pollutant in self.__Pollutants:
-            _value = self.__Load_Coefs_Kgacreyr[_pollutant][lu_rid_pre] \
-                     * self.getAcresTreated()
-            _value -= self.__Load_Coefs_Kgacreyr[_pollutant][lu_rid_post] \
-                     * self.getAcresTreated()
-            self.__Polutants_Reduction_Kgyr[_pollutant] += _value
-
-    def landLoadsReduceOneAcre(self, lu_rid_pre, lu_rid_post):
-        for _pollutant in self.__Pollutants:
-            _value = self.__Load_Coefs_Kgacreyr[_pollutant][lu_rid_pre] \
-                     * 1.0 * self.getNumberOfUnits()
-            _value -= self.__Load_Coefs_Kgacreyr[_pollutant][lu_rid_post] \
-                     * 1.0 * self.getNumberOfUnits()
-            self.__Polutants_Reduction_Kgyr[_pollutant] += _value
-
-    def reductionLandUseChange(self):
-        if not self.isValid():
-            _fore_type = ['Tree and Shrub Establishment', 'Tree Planting']
-            _area_type = ['Conservation Easement']
-            if self.getBmpType() in _fore_type:
-                if self.__Huc12[:4] in self.__drbHuc04:
-                    self.landLoadsReduce('82','41')
-                elif any(self.__Huc12[:4] in s for s in self.__cbbHuc04):
-                    self.landLoadsReduce('0', '1')
-            elif self.getBmpType() in _area_type:
-                if self.__Huc12[:4] in self.__drbHuc04:
-                    self.landLoadsReduce('82', '81')
-                elif any(self.__Huc12[:4] in s for s in self.__cbbHuc04):
-                    self.landLoadsReduce('0', '5')
-            else:
-                if self.__Huc12[:4] in self.__drbHuc04:
-                    self.landLoadsReduceOneAcre('82', '81')
-                elif any(self.__Huc12[:4] in s for s in self.__cbbHuc04):
-                    self.landLoadsReduceOneAcre('0', '5')
-        self.setValid(True)
-
-    def reductionAgricultrualAnimals(self):
-        for _pollutant in self.__Pollutants:
-            for _animal in self.__Animals:
-                # print("Animal: {}".format(_animal))
-                # print("Pollutant: {}".format((_pollutant)))
-                # print(self.__Coefs[self.getBmpType()])
-                # print(self.__Animals[_animal])
-                # print(self.getBmpAnimalsTreated()[_animal])
-                # print(self.__Delivery[_pollutant])
-                try:
-                    _value = self.__Coefs[self.getBmpType()][_pollutant] \
-                         * self.__Animals[_animal][_pollutant] \
-                         * self.getBmpAnimalsTreated()[_animal] \
-                         * self.__Delivery[_pollutant]
-                    self.__Polutants_Reduction_Kgyr[_pollutant] += _value
-                except:
-                    print("Animal {} was not reported.".format(_animal))
-        pass
 
     def st_performance_curve_coeffs(self, capture):
         x = capture
@@ -494,82 +207,230 @@ class WatershedTreatmentModel:
         self.__Coefs[self.getBmpType()]['tp'] = round(0.0304*x**5 - 0.2619*x**4 + 0.9161*x**3 - 1.6837*x**2 + 1.7072*x - 0.0091,2)
         self.__Coefs[self.getBmpType()]['tss'] = round(0.0326*x**5 - 0.2806*x**4 + 0.9816*x**3 - 1.8039*x**2 + 1.8292*x - 0.0098,2)
 
-    def reductionUrbanGSI(self):
-        for _pollutant in self.__Pollutants:
-            for _lulc in self.__Load_Coefs_Kgacreyr[_pollutant]:
-                try:
-                    # print(self.__Lulcs)
-                    # print("THIS IS POLUTANT {} THIS IS LULC {}".format(_pollutant,_lulc))
-                    # print("THIS IS THE LULC VALUE {}".format(self.__Lulcs[_lulc]))
-                    _value = self.__Coefs[self.getBmpType()][_pollutant] \
-                             * self.__Load_Coefs_Kgacreyr[_pollutant][str(_lulc)] \
-                             * self.__Lulcs[_lulc]
-                    self.__Polutants_Reduction_Kgyr[_pollutant] += _value
-                except:
-                    print('Could not find this land cover: {}'.format(_lulc))
-
     # TODO: create long form description of The bmp modelling
     def setDescription(self):
-        self.__Description = "The Load reductions for this {} Best Management Practice (BMP), located in Hydrologic Unit Code {}. ".format(
-                                self.getBmpType()
-                                ,self.getHuc12()
+        self.__description = "The Load reductions for this {} Best Management Practice (BMP), located in Hydrologic Unit Code {}. ".format(
+                                self.__bmp_type
+                                ,self.__huc12
                                 ) + \
-                             "The BMP covered an area of {} acres in size with a drainage area of {}. The Land cover within the drainage area is {}.".format(
-                                self.getHuc12()
-                                ,self.getHuc12()
-                                ,self.getHuc12())
+                             "The BMP is estimated to reduce bacteria by {} bnMPN/year.".format(self.__bac_reduction)
 
-    def kgyear_to_lbyear(self, kgyr):
-        return kgyr * 2.20462
+    def reduction_riparian(self):
+        # The spreadsheet WTM uses only the watershed impervious acres to define treatability for total urban load
+        # I think it is more accurate to use the impervious + turf acres?
+        # _watershed_urban_load = 2352733.0
+        # _watershed_imp_area = 4754.38
+        self.__bac_initial_load = self.__watershed_urb_load
+
+        _treatability = self.__drainage_ac / self.__watershed_urb_area
+        print(self.__coefs[self.__bmp_type]["discount_rate"])
+        _reduction = self.__watershed_urb_load \
+                     * _treatability \
+                     * self.__coefs[self.__bmp_type]["tot_removal_rate"] \
+                     * self.__coefs[self.__bmp_type]["discount_rate"]
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
+
+    def calc_wqv(self, capture, imperv, perv, imperv_coef, perv_coef):
+        return capture * (imperv * imperv_coef + perv * perv_coef) * 3630
+
+    def reduction_rr(self):
+        self.__bac_initial_load = self.__watershed_urb_load
+
+        _imperv_area = self.__drainage_ac * self.__percent_impervious
+        _perv_area = self.__drainage_ac - _imperv_area
+        _wqv_bmp = self.calc_wqv(self.__runoff_capture_in, _imperv_area, _perv_area,
+                                 self.__coefs[self.__bmp_type]["imperv_runoff_coef"],
+                                 self.__coefs[self.__bmp_type]["perv_runoff_coef"])
+        _capture = _wqv_bmp / self.__wqv_watershed
+        _reduction = self.__watershed_urb_load \
+                     * _capture \
+                     * self.__coefs[self.__bmp_type]["tot_removal_rate"] \
+                     * self.__coefs[self.__bmp_type]["discount_rate"]
+        print(_reduction)
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
+
+    def reduction_st(self):
+        self.__bac_initial_load = self.__watershed_urb_load
+
+        _imperv_area = self.__drainage_ac * self.__percent_impervious
+        _perv_area = self.__drainage_ac - _imperv_area
+        _wqv_bmp = self.calc_wqv(self.__runoff_capture_in, _imperv_area, _perv_area,
+                                 self.__coefs[self.__bmp_type]["imperv_runoff_coef"],
+                                 self.__coefs[self.__bmp_type]["perv_runoff_coef"])
+        _capture = _wqv_bmp / self.__wqv_watershed
+        _reduction = self.__watershed_urb_load \
+                     * _capture \
+                     * self.__coefs[self.__bmp_type]["tot_removal_rate"] \
+                     * self.__coefs[self.__bmp_type]["discount_rate"]
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
+
+    def reduction_septic_den_pump(self):
+        self.__bac_initial_load = self.__watershed_septic_load
+
+        _p_near_water = self.__coefs[self.__bmp_type]["p_near_waterway"]
+        _p_not_near_water = 1.0 - _p_near_water
+        if self.__n_systems_treated > 0.0:
+            if self.__n_systems_treated > self.__n_septic_systems:
+                self.__n_systems_treated = self.__n_septic_systems
+            _fraction_treated = self.__n_systems_treated / self.__n_septic_systems
+        elif self.__fraction_willing > 0.0:
+            _fraction_treated = self.__fraction_willing * self.__awareness
+            self.__n_systems_treated = _fraction_treated * self.__n_septic_systems
+        else:
+            _fraction_treated = 0.0
+            print('Warning, output is zero if not all parameters are supplied (need fraction treated).')
+        # TODO: What is wrong with this equation from WTM? I fixed it, but don't fully understand what is happening...
+        # _new_failure_rate = (self.__n_septic_systems * self.__coefs[self.__bmp_type]["base_failure_rate"]
+        #                     - self.__n_systems_treated * self.__coefs[self.__bmp_type]["retired_failure_rate"]) \
+        #                     * (1.0 - _fraction_treated) \
+        #                     / (self.__n_septic_systems - self.__n_systems_treated)
+        _new_failure_rate = (self.__n_septic_systems * self.__coefs[self.__bmp_type]["base_failure_rate"]) \
+                            * (1.0 - _fraction_treated) \
+                            / (self.__n_septic_systems + self.__n_systems_treated)
+        _reduction = self.__bac_initial_load - \
+                     (self.__watershed_septic_bn_yr * _new_failure_rate
+                      * (self.__coefs[self.__bmp_type]["norm_del_ratio"] * _p_not_near_water * self.__coefs[self.__bmp_type]["norm_bac_decay"]
+                         + self.__coefs[self.__bmp_type]["adj_del_ratio"] * _p_near_water * self.__coefs[self.__bmp_type]["adj_bac_decay"]))
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
+
+    def reduction_septic_conn(self):
+        self.__bac_initial_load = self.__watershed_septic_load
+
+        _p_near_water = self.__coefs[self.__bmp_type]["p_near_waterway"]
+        _p_not_near_water = 1.0 - _p_near_water
+        if self.__n_systems_retired > 0.0:
+            if self.__n_systems_retired > self.__n_septic_systems:
+                self.__n_systems_retired = self.__n_septic_systems
+            _retire_ratio = self.__n_systems_retired / self.__n_septic_systems
+        _sewage_treated = self.__watershed_septic_bn_yr * _retire_ratio
+        _reduction = (_sewage_treated * self.__coefs[self.__bmp_type]["base_failure_rate"]
+                      * self.__coefs[self.__bmp_type]["norm_del_ratio"]
+                      * self.__coefs[self.__bmp_type]["norm_bac_decay"]
+                      * _p_not_near_water) + (_sewage_treated * self.__coefs[self.__bmp_type]["base_failure_rate"]
+                      * self.__coefs[self.__bmp_type]["adj_del_ratio"]
+                      * self.__coefs[self.__bmp_type]["adj_bac_decay"]
+                      * _p_near_water)
+        _extra_plant_load = _reduction * 10**(-self.__coefs[self.__bmp_type]["bac_log_redux"])
+        _reduction -= _extra_plant_load
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
+
+    def reduction_pet_waste(self):
+        self.__bac_initial_load = self.__petwaste_bnmpn_yr
+        _reduction = self.__bac_initial_load * self.__fraction_willing * self.__awareness
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
+
+    def reduction_sliplines(self):
+        if self.__slipline_miles > self.__sewer_miles:
+            self.__slipline_miles = self.__sewer_miles
+        self.__bac_initial_load = self.__sewer_miles * self.__coefs[self.__bmp_type]["overflow_per_mi"] \
+                                  * self.__coefs[self.__bmp_type]["vol_per_overflow"] \
+                                  * self.__coefs[self.__bmp_type]["bn_bac_constant"]
+        _load_change = (self.__sewer_miles - self.__slipline_miles) * self.__coefs[self.__bmp_type]["overflow_per_mi"] \
+                                  * self.__coefs[self.__bmp_type]["vol_per_overflow"] \
+                                  * self.__coefs[self.__bmp_type]["bn_bac_constant"]
+        _reduction = self.__bac_initial_load - _load_change
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
+
+    def reduction_land_retirement(self):
+        _loading_rate_change = 0.0
+        # IF NONE IS PROVIDED, ASSUME IT IS "URBAN"
+        if self.__landuse_converted == 'Urban':
+            if self.__acres_converted > self.__watershed_urb_area:
+                self.__acres_converted = self.__watershed_urb_area
+            self.__bac_initial_load = self.__watershed_urb_load
+            _loading_rate_change = self.__urbanloading_bnmpn_acyr - self.__natloading_bnmpn_acyr
+
+        elif self.__landuse_converted == 'Agricultural':
+            if self.__acres_converted > self.__watershed_ag_area:
+                self.__acres_converted = self.__watershed_ag_area
+            self.__bac_initial_load = self.__watershed_ag_load
+            _loading_rate_change = self.__agloading_bnmpn_acyr - self.__natloading_bnmpn_acyr
+
+        elif self.__landuse_converted == 'Impervious':
+            print(self.__watershed_imp_area)
+            if self.__acres_converted > self.__watershed_imp_area:
+                self.__acres_converted = self.__watershed_imp_area
+            self.__bac_initial_load = self.__watershed_imp_load
+            _loading_rate_change = self.__imploading_bnmpn_acyr - self.__natloading_bnmpn_acyr
+
+        elif self.__landuse_converted == 'Turf':
+            if self.__acres_converted > self.__watershed_turf_area:
+                self.__acres_converted = self.__watershed_turf_area
+            self.__bac_initial_load = self.__watershed_nat_load
+            _loading_rate_change = self.__turfloading_bnmpn_acyr - self.__natloading_bnmpn_acyr
+
+        else:
+            if self.__acres_converted > self.__watershed_urb_area:
+                self.__acres_converted = self.__watershed_urb_area
+            self.__bac_initial_load = self.__watershed_urb_load
+            _loading_rate_change = self.__urbanloading_bnmpn_acyr - self.__natloading_bnmpn_acyr
+
+        _reduction = self.__acres_converted * _loading_rate_change
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
+
+    def reduction_impervious_elim(self):
+        _imp_acres_converted = self.__acres_converted * self.__percent_impervious
+        print(self.__watershed_imp_area)
+        print(_imp_acres_converted)
+        if _imp_acres_converted > self.__watershed_imp_area:
+            self.__acres_converted = self.__watershed_imp_area
+        self.__bac_initial_load = self.__watershed_imp_load
+        _loading_rate_change = self.__imploading_bnmpn_acyr - self.__natloading_bnmpn_acyr
+        _reduction = _imp_acres_converted * _loading_rate_change
+        self.__bac_reduction = _reduction
+        self.__bac_reduced_load = self.__bac_initial_load - self.__bac_reduction
 
     # Func to calculate the BMP reductions
     def execute(self):
-        self.setHuc12()
-        self.setGeomWatershed()
-        self.setLulc()
-        self.setLoad_Coefs_Kgacreyr()
+        self.setBacteriaLoadData()
 
-        if self.getBmpGroup() == 'Polygon Drainage':
-            self.reductionRiparian()
-        elif self.getBmpGroup() == 'Agricultural Land':
-            self.reductionAgriculturalLand()
-        elif self.getBmpGroup() == 'Exclusion Buffer':
-            self.reductionRiparian()
-            self.reductionStreamRestoration()
-        elif self.getBmpGroup() == 'Stream Restoration':
-            self.reductionStreamRestoration()
-        elif self.getBmpGroup() == 'Land Use Change':
-            self.reductionLandUseChange()
-        elif self.getBmpGroup() == 'Agricultural Animal':
-            self.reductionAgricultrualAnimals()
-        elif self.getBmpGroup() == 'Urban Stormwater Management':
-            _st_bmp_type = ["Constructed Wetland", "Dry Extended Detention Ponds", "Wet Pond", "Wet Ponds & Wetlands", "Stormwater Performance Standard-Stormwater Treatment"]
-            print(self.__Coefs[self.getBmpType()])
-            if self.getBmpType() in _st_bmp_type:
-                self.st_performance_curve_coeffs(self.getRunoffCapture())
-            else:
-                self.rr_performance_curve_coeffs(self.getRunoffCapture())
-            print(self.__Coefs[self.getBmpType()])
-            self.reductionUrbanGSI()
+        if self.__bmp_type == 'Forest Buffer':
+            self.reduction_riparian()
+        elif self.__bmp_type in ['RR', 'Runoff Reduction']:
+            self.reduction_rr()
+        elif self.__bmp_type in ['ST', 'Stormwater Treatment']:
+            self.reduction_st()
+        elif self.__bmp_type in ['Septic Denitrifcation and Pumping']:
+            self.reduction_septic_den_pump()
+        elif self.__bmp_type in ['Septic Connection']:
+            self.reduction_septic_conn()
+        elif self.__bmp_type in ['Pet Waste Education']:
+            self.reduction_pet_waste()
+        elif self.__bmp_type in ['Sliplines', 'Sliplines (miles)']:
+            self.reduction_sliplines()
+        elif self.__bmp_type in ['Land Retirement']:
+            self.reduction_land_retirement()
+        elif self.__bmp_type in ['Impervious Surface Elimination to Pervious Surface',
+                                 'Impervious surface elimination to pervious surface']:
+            self.reduction_impervious_elim()
         else:
             print('The BMP group was not found within the list of BMP groups.')
         self.setDescription()
-        self.__PG_Connection.close()
+        self.__pg_connection.close()
 
     # Func to export bmp to JSON
     def dump(self):
-        if self.isValid:
+        try:
             _jsonOut = '{'
-            _jsonOut += '"bmp_geometry":' + json.dumps(self.__GeomBMP) + ',' + chr(10)
-            _jsonOut += '"bmp_type": ' + json.dumps(self.__BmpType) + ',' + chr(10)
-            _jsonOut += '"bmp_group": ' + json.dumps(self.__BmpGroup) + ',' + chr(10)
-            _jsonOut += '"watershed_geometry": ' + self.__GeomWatershed + ',' + chr(10)
-            _jsonOut += '"reduction_lbyr": ' + json.dumps(self.__Polutants_Reduction_lbyr) + ',' + chr(10)
-            _jsonOut += '"huc12": ' + json.dumps(self.__Huc12) +  ',' + chr(10)
-            _jsonOut += '"reduction_lbyr_coeffs": ' + json.dumps(self.__Load_Coefs_lbacreyr ) + ',' + chr(10)
-            _jsonOut += '"description": ' + json.dumps(self.__Description ) + chr(10)
+            _jsonOut += '"bmp_type": ' + json.dumps(self.__bmp_type) + ',' + chr(10)
+            _jsonOut += '"initial_load_bnmpn_yr": ' + json.dumps(self.__bac_initial_load) + ',' + chr(10)
+            _jsonOut += '"reduced_load_bnmpn_yr": ' + json.dumps(self.__bac_reduced_load) + ',' + chr(10)
+            _jsonOut += '"reduction_bnmpn_yr": ' + json.dumps(self.__bac_reduction) + ',' + chr(10)
+
+            _jsonOut += '"acs_population": ' + json.dumps(self.__watershed_population) + ',' + chr(10)
+            _jsonOut += '"acs_dwelling_units": ' + json.dumps(self.__watershed_du) + ',' + chr(10)
+
+            _jsonOut += '"description": ' + json.dumps(self.__description ) + chr(10)
             _jsonOut += '}'
             # print(json.loads(_jsonOut))
             return _jsonOut
-        else:
+        except:
             return "Not Valid cannot export JSON"

@@ -214,16 +214,19 @@ where a.huc12 = b.huc12
 -- Untreated Sewage Delivered to Septics (billions) = Unsewered dwelling units * Avg. Person/DU * Water Use (GPCD) * constant * FC (MPN/100ml)
 -- Bacteria (bn/yr) = (untreated sewage delivered to septics * failure rates * normal delivery ratio * % septics not near waterway * normal bacteria decay %) + (delivery ratio adjacent to waterway * % septics near waterway * bacteria decay adjacent to waterway)
 
+alter table spatial.huc12_tdec add column septic_bn_yr numeric(12,2);
 alter table spatial.huc12_tdec add column septic_bnmpn_yr numeric(12,2);
 alter table spatial.huc12_tdec add column petwaste_bnmpn_yr numeric(12,2);
 alter table spatial.huc12_tdec add column illicitconn_bnmpn_yr numeric(12,2);
 
 update spatial.huc12_tdec a 
-set septic_bnmpn_yr = b.septic_bnmpn_yr,
+set septic_bn_yr = b.septic_bn_yr,
+	septic_bnmpn_yr = b.septic_bnmpn_yr,
 	petwaste_bnmpn_yr = b.petwaste_bnmpn_yr,
 	illicitconn_bnmpn_yr = b.illicitconn_bnmpn_yr
 from (
 	select huc12, 
+	(coalesce(n_septic_systems,0) * 2.514 * 70.0 * 0.0000138 * 10000000.0) as septic_bn_yr,
 	(coalesce(n_septic_systems,0) * 2.514 * 70.0 * 0.0000138 * 10000000.0) * 0.2 * (0.5 * (1 - 0.0483) * 0.002 + 1.0 * 0.0483 *0.13 ) as septic_bnmpn_yr,
 	-- Pet Waste Load
 	(((coalesce(acs_du,0.0) * 0.4) * (1 - 0.0) * 0.05) + ((coalesce(acs_du,0.0) * 0.4) * 0.0 * 1.0)) * 0.5 * 0.4 * 0.32 * 10.0 * 365.0 as petwaste_bnmpn_yr,
@@ -235,8 +238,6 @@ from (
 ) as b
 where a.huc12 = b.huc12
 ;
-
-alter table bridges."bridges.huc12xuvmlc" rename to huc12xuvmlc;
 
 select * from spatial.huc12_tdec;
 
@@ -560,6 +561,8 @@ select huc12
 
 ,(urbanload_bnmpn_yr + agload_bnmpn_yr + natload_bnmpn_yr + septic_bnmpn_yr + petwaste_bnmpn_yr + illicitconn_bnmpn_yr) as totalload_bnmpn_yr
 ,geom as geom
+,st_area(geom) as watershed_acres
+,septic_bn_yr
 --, countyfp10
 from spatial.huc12_tdec as a
 --left join (select * from spatial.census_county /*where countyfp10 != '029' and countyfp10 != '045'*/) as b
@@ -579,43 +582,6 @@ on dnrec.huc12_tdec_bacterialoading
 using gist(geom);
 
 select * from dnrec.huc12_tdec_bacterialoading where "acs_pop" >= 0;
-
----------------------------------------------------------------------------------------------------
--- ONLY USE FOR NHDPLUS LAYER
--- WATERSHED LOADS
-
-create table dnrec.huc12_tdec_bacterialoading_ws
-as
-
-select t1.*, t2.geom
-from (
-	select idx.nord, 
-	sum(urbanload_bnmpn_yr) as urbanload_bnmpn_yr,
-	sum(agload_bnmpn_yr) as agload_bnmpn_yr,
-	sum(natload_bnmpn_yr) as natload_bnmpn_yr
-	--geom
-	from dnrec.huc12_tdec_bacterialoading as a
-	join (select nord, nordstop from dnrec.huc12_tdec_bacterialoading) as idx
-	on a.nord between idx.nord and idx.nordstop
-	group by idx.nord
-) as t1
-left join dnrec.huc12_tdec_bacterialoading as t2
-on t1.nord = t2.nord
-;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

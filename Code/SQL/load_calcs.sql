@@ -211,17 +211,22 @@ where a.comid = b.comid
 -- GET OSDS SEPTIC LOAD, bnMPN/yr
 -- Untreated Sewage Delivered to Septics (billions) = Unsewered dwelling units * Avg. Person/DU * Water Use (GPCD) * constant * FC (MPN/100ml)
 -- Bacteria (bn/yr) = (untreated sewage delivered to septics * failure rates * normal delivery ratio * % septics not near waterway * normal bacteria decay %) + (delivery ratio adjacent to waterway * % septics near waterway * bacteria decay adjacent to waterway)
+-- n_dogs = Fraction of Houses with Dog (0.4)
+-- Pet Waste = (( n_dogs * (1 - Close to Water (0)) * Delivery Ratio )+(n_dogs * Close to Water (0) * Delivery Ratio )) * Owners That Walk Them (0.5) * Owners that DONT Pick Up (0.4) * Waste lb / Dog-day * FC bnMPN / lb * 365 day/yr
 
+alter table spatial.nhdplus_tdec add column septic_bn_yr numeric(12,2);
 alter table spatial.nhdplus_tdec add column septic_bnmpn_yr numeric(12,2);
 alter table spatial.nhdplus_tdec add column petwaste_bnmpn_yr numeric(12,2);
 alter table spatial.nhdplus_tdec add column illicitconn_bnmpn_yr numeric(12,2);
 
 update spatial.nhdplus_tdec a 
-set septic_bnmpn_yr = b.septic_bnmpn_yr,
+set septic_bn_yr = b.septic_bn_yr,
+	septic_bnmpn_yr = b.septic_bnmpn_yr,
 	petwaste_bnmpn_yr = b.petwaste_bnmpn_yr,
 	illicitconn_bnmpn_yr = b.illicitconn_bnmpn_yr
 from (
 	select comid, 
+	(coalesce(n_septic_systems,0) * 2.514 * 70.0 * 0.0000138 * 10000000.0) as septic_bn_yr,
 	(coalesce(n_septic_systems,0) * 2.514 * 70.0 * 0.0000138 * 10000000.0) * 0.2 * (0.5 * (1 - 0.0483) * 0.002 + 1.0 * 0.0483 *0.13 ) as septic_bnmpn_yr,
 	-- Pet Waste Load
 	(((coalesce(acs_du,0.0) * 0.4) * (1 - 0.0) * 0.05) + ((coalesce(acs_du,0.0) * 0.4) * 0.0 * 1.0)) * 0.5 * 0.4 * 0.32 * 10.0 * 365.0 as petwaste_bnmpn_yr,
@@ -234,7 +239,6 @@ from (
 where a.comid = b.comid
 ;
 
-alter table bridges."bridges.nhdxuvmlc" rename to nhdxuvmlc
 
 ---------------------------------------------------------------
 ---------------------------------------------------------------
@@ -475,7 +479,7 @@ drop table if exists dnrec.nhdplus_tdec_bacterialoading;
 create table dnrec.nhdplus_tdec_bacterialoading
 as
 
-select comid, nord, nordstop	
+select comid--, nord, nordstop	
 ,acs_pop			
 ,acs_du			
 ,n_septic_systems	
@@ -531,6 +535,8 @@ select comid, nord, nordstop
 
 ,(urbanload_bnmpn_yr + agload_bnmpn_yr + natload_bnmpn_yr + septic_bnmpn_yr + petwaste_bnmpn_yr + illicitconn_bnmpn_yr) as totalload_bnmpn_yr
 ,catchment as geom
+,st_area(catchment) as watershed_acres
+,septic_bn_yr
 --, countyfp10
 from spatial.nhdplus_tdec as a
 --left join (select * from spatial.census_county /*where countyfp10 != '029' and countyfp10 != '045'*/) as b
@@ -550,6 +556,12 @@ on dnrec.nhdplus_tdec_bacterialoading
 using gist(geom);
 
 select * from dnrec.nhdplus_tdec_bacterialoading;
+
+
+
+
+
+
 
 ---------------------------------------------------------------------------------------------------
 -- WATERSHED LOADS

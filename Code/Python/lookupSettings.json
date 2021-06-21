@@ -60,14 +60,20 @@
       "retired_failure_rate": 0.5,
       "norm_del_ratio": 0.5,
       "norm_bac_decay": 0.002,
-      "bac_log_redux": 1.0
+      "adj_del_ratio": 1.0,
+      "adj_bac_decay": 0.13,
+      "bac_log_redux": 1.0,
+      "p_near_waterway": 0.0483
     },
     "Septic Connection": {
       "base_failure_rate": 0.2,
       "retired_failure_rate": 0.5,
       "norm_del_ratio": 0.5,
       "norm_bac_decay": 0.002,
-      "bac_log_redux": 1.0
+      "adj_del_ratio": 1.0,
+      "adj_bac_decay": 0.13,
+      "bac_log_redux": 1.0,
+      "p_near_waterway": 0.0483
     },
     "Sliplines (miles)": {
       "overflow_per_mi": 0.143,
@@ -99,19 +105,20 @@
   },
 
   "bmp_names":
-   ["Forest Buffer",
-     "Land Retirement",
+   [
+     "Forest Buffer",
      "Runoff Reduction",
-     "RR",
+       "RR",
      "Stormwater Treatment",
-     "ST",
+       "ST",
      "Septic Denitrifcation and Pumping",
      "Septic Connection",
-     "Impervious surface elimination to pervious surface",
-     "Impervious Surface Elimination to Pervious Surface",
      "Pet Waste Education",
      "Sliplines",
-     "Sliplines (miles)"
+       "Sliplines (miles)",
+     "Land Retirement",
+     "Impervious Surface Elimination to Pervious Surface",
+       "Impervious surface elimination to pervious surface"
   ],
 
   "bmp_ids": {
@@ -143,19 +150,9 @@
     "Sliplines (miles)":  26
   },
 
-  "load_coefs":
-    {
-          "21":	0.0, "22":	0.0, "23":	0.0, "24":	0.0,
-          "31":	0.0, "41":	0.0, "42":	0.0, "43":	0.0, "51":	0.0, "52":	0.0, "71":	0.0, "72": 0.0, "73":	0.0, "74":	0.0,
-          "81":	0.0, "82":	0.0, "90":	0.0, "95":	0.0,
-
-          "0":	0.0, "1":	0.0, "2":	0.0, "3":	0.0, "4":	0.0, "5":	0.0, "6":	0.0, "7":	0.0, "8":	0.0, "9":	0.0, "10":	0.0, "11":	0.0, "12":	0.0
-        }
-      ,
-
 
   "lulc":
-    {"nlcd2011":
+    {"nlcd2016":
           {
           "11":	"Open Water- areas of open water, generally with less than 25% cover of vegetation or soil.",
           "12":	"Perennial Ice/Snow- areas characterized by a perennial cover of ice and/or snow, generally greater than 25% of total cover",
@@ -178,21 +175,41 @@
           "90":	"Woody Wetlands- areas where forest or shrubland vegetation accounts for greater than 20% of vegetative cover and the soil or substrate is periodically saturated with or covered with water.",
           "95":	"Emergent Herbaceous Wetlands- Areas where perennial herbaceous vegetation accounts for greater than 80% of vegetative cover and the soil or substrate is periodically saturated with or covered with water."
           },
-    "cb10m":
+    "uvm_lc":
           {
-            "0": "Cropland",
-            "1": "Forest",
-            "2": "Impervious Non-Road",
-            "3": "Impervious Road",
-            "4": "Mixed Open",
-            "5": "Pasture",
-            "6": "Tree Canopy over Impervious",
-            "7": "Tree Canopy over Turf Grass",
-            "8": "Turf Grass",
-            "9": "Water",
-            "10": "Non-Tidal Floodplain Wetlands",
-            "11": "Non-Tidal Other Wetlands",
-            "12": "Tidal Wetlands"
+            "1": "Water",
+            "2": "Emergent Wetlands",
+            "3": "Tree Canopy",
+            "4": "Shrubland",
+            "5": "Low Vegetation",
+            "6": "Barren",
+            "7": "Structures",
+            "8": "Impervious Surfaces",
+            "9": "Impervious Roads",
+            "10": "Tree Canopy over Structures",
+            "11": "Tree Canopy over Impervious Surfaces",
+            "12": "Tree Canopy over Impervious Roads",
+            "13": "Aberdeen Proving Ground"
+            },
+      "uvm_lu":
+          {
+            "1": "Impervious Roads (IR)",
+            "2": "Impervious Non-Roads (INR)",
+            "3": "Tree Canopy over Impervious Surfaces (TCI)",
+            "4": "Water (WAT)",
+            "5": "Tidal Wetlands (WLT)",
+            "6": "Floodplain Wetlands (WLF)",
+            "7": "Other Wetlands (WLO)",
+            "8": "Forest (FOR)",
+            "9": "Tree Canopy over Turf Grass (TCT)",
+            "10": "Mixed Open (MO)",
+            "11": "Fractional Turf (small)",
+            "12": "Fractional Turf (med)",
+            "13": "Fractional Turf (large)",
+            "14": "Fractional Impervious",
+            "15": "Turf Grass (TG)",
+            "16": "Cropland (CRP)",
+            "17": "Pasture/Hay (PAS)"
             }
     }
 }
